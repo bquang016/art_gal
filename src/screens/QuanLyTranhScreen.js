@@ -1,3 +1,4 @@
+// src/screens/QuanLyTranhScreen.js
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity,
@@ -9,14 +10,14 @@ import { api } from '../api/mockApi';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import PaintingListItem from '../components/PaintingListItem';
 import PaintingGridItem from '../components/PaintingGridItem';
+import CustomPicker from '../components/CustomPicker'; // Import component mới
 
 const QuanLyTranhScreen = ({ route, navigation }) => {
     const [paintings, setPaintings] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('grid');
 
-    // State cho Modal
-    const [modalMode, setModalMode] = useState('add'); // 'add' hoặc 'edit'
     const [isModalVisible, setModalVisible] = useState(false);
     const [editingPainting, setEditingPainting] = useState(null);
 
@@ -32,6 +33,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
 
     useEffect(() => {
         api.getPaintings().then(setPaintings);
+        api.getCategories().then(setCategories);
     }, []);
 
     const filteredPaintings = useMemo(() => {
@@ -41,37 +43,25 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
         );
     }, [paintings, searchQuery]);
 
-    const handleOpenAddModal = () => {
-        setModalMode('add');
-        setEditingPainting({
-            name: '', artist: '', importPrice: '', sellingPrice: '', status: 'Đang bán'
-        });
-        setModalVisible(true);
-    };
-
     const handleOpenEditModal = (item) => {
-        setModalMode('edit');
         setEditingPainting({ ...item });
         setModalVisible(true);
     };
-    
+
     const handleSavePainting = () => {
         if (!editingPainting.name || !editingPainting.artist || !editingPainting.sellingPrice) {
             Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường bắt buộc.");
             return;
         }
 
-        if (modalMode === 'add') {
-            const newPainting = { ...editingPainting, id: `p${Date.now()}`, image: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809' };
-            setPaintings(prev => [newPainting, ...prev]);
-            Alert.alert("Thành công", "Đã thêm tranh mới.");
-        } else {
-            setPaintings(prev => prev.map(p => p.id === editingPainting.id ? editingPainting : p));
-            Alert.alert("Thành công", `Đã cập nhật tranh "${editingPainting.name}".`);
-        }
+        setPaintings(prev => prev.map(p => p.id === editingPainting.id ? editingPainting : p));
+        Alert.alert("Thành công", `Đã cập nhật tranh "${editingPainting.name}".`);
         setModalVisible(false);
         setEditingPainting(null);
     };
+    
+    // Chuẩn bị dữ liệu cho CustomPicker
+    const categoryData = categories.map(c => ({ label: c, value: c }));
 
     const renderFormModal = () => (
         <Modal
@@ -81,7 +71,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
         >
             <SafeAreaView style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>{modalMode === 'add' ? 'Thêm Tranh Mới' : 'Chỉnh sửa Tranh'}</Text>
+                    <Text style={styles.modalTitle}>Chỉnh sửa Tranh</Text>
                     <TouchableOpacity onPress={() => setModalVisible(false)}>
                         <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
                     </TouchableOpacity>
@@ -90,23 +80,35 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                     {editingPainting && (
                         <>
                             <Text style={styles.inputLabel}>Tên tranh *</Text>
-                            <TextInput style={styles.input} value={editingPainting.name} onChangeText={text => setEditingPainting({...editingPainting, name: text})} />
-                            
+                            <TextInput style={styles.input} value={editingPainting.name} onChangeText={text => setEditingPainting({ ...editingPainting, name: text })} />
+
                             <Text style={styles.inputLabel}>Họa sĩ *</Text>
-                            <TextInput style={styles.input} value={editingPainting.artist} onChangeText={text => setEditingPainting({...editingPainting, artist: text})} />
+                            <TextInput style={styles.input} value={editingPainting.artist} onChangeText={text => setEditingPainting({ ...editingPainting, artist: text })} />
                             
+                             {/* Sử dụng CustomPicker cho Thể loại */}
+                            <CustomPicker
+                                label="Thể loại *"
+                                data={categoryData}
+                                selectedValue={editingPainting.category}
+                                onValueChange={val => setEditingPainting({ ...editingPainting, category: val })}
+                                placeholder="Chọn thể loại"
+                            />
+
+                            <Text style={styles.inputLabel}>Chất liệu *</Text>
+                            <TextInput style={styles.input} value={editingPainting.material} onChangeText={text => setEditingPainting({ ...editingPainting, material: text })} />
+
                             <Text style={styles.inputLabel}>Giá bán (VND) *</Text>
-                            <TextInput style={styles.input} value={String(editingPainting.sellingPrice)} onChangeText={text => setEditingPainting({...editingPainting, sellingPrice: text})} keyboardType="numeric" />
-                            
+                            <TextInput style={styles.input} value={String(editingPainting.sellingPrice)} onChangeText={text => setEditingPainting({ ...editingPainting, sellingPrice: text })} keyboardType="numeric" />
+
                             <Text style={styles.inputLabel}>Giá nhập (VND)</Text>
-                            <TextInput style={styles.input} value={String(editingPainting.importPrice)} onChangeText={text => setEditingPainting({...editingPainting, importPrice: text})} keyboardType="numeric" />
+                            <TextInput style={[styles.input, styles.inputDisabled]} value={String(editingPainting.importPrice)} editable={false} />
 
                             <Text style={styles.inputLabel}>Trạng thái</Text>
                             <View style={styles.statusSelectContainer}>
-                                <TouchableOpacity onPress={() => setEditingPainting({...editingPainting, status: 'Đang bán'})} style={[styles.statusSelectButton, editingPainting.status === 'Đang bán' && styles.statusSelectButtonActive]}>
+                                <TouchableOpacity onPress={() => setEditingPainting({ ...editingPainting, status: 'Đang bán' })} style={[styles.statusSelectButton, editingPainting.status === 'Đang bán' && styles.statusSelectButtonActive]}>
                                     <Text style={[styles.statusSelectText, editingPainting.status === 'Đang bán' && styles.statusSelectTextActive]}>Đang bán</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setEditingPainting({...editingPainting, status: 'Dừng bán'})} style={[styles.statusSelectButton, editingPainting.status === 'Dừng bán' && styles.statusSelectButtonActive]}>
+                                <TouchableOpacity onPress={() => setEditingPainting({ ...editingPainting, status: 'Dừng bán' })} style={[styles.statusSelectButton, editingPainting.status === 'Dừng bán' && styles.statusSelectButtonActive]}>
                                     <Text style={[styles.statusSelectText, editingPainting.status === 'Dừng bán' && styles.statusSelectTextActive]}>Dừng bán</Text>
                                 </TouchableOpacity>
                             </View>
@@ -121,16 +123,13 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
     );
 
     return (
-        // SỬA LỖI: Bọc bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
                     <Ionicons name="menu" size={28} color={COLORS.textDark} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Quản lý Tranh</Text>
-                <TouchableOpacity onPress={handleOpenAddModal} style={styles.headerButton}>
-                    <Ionicons name="add" size={32} color={COLORS.primary} />
-                </TouchableOpacity>
+                <View style={{ width: 44 }} />
             </View>
 
             <View style={styles.searchFilterContainer}>
@@ -162,23 +161,21 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                 contentContainerStyle={styles.listContainer}
                 ListEmptyComponent={<Text style={styles.emptyText}>Không tìm thấy tranh nào.</Text>}
             />
-            
+
             {renderFormModal()}
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI: container là SafeAreaView
     container: { flex: 1, backgroundColor: COLORS.white },
-    // SỬA LỖI: Bỏ padding top
-    header: { 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        paddingHorizontal: SIZES.padding, 
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: SIZES.padding,
         paddingVertical: SIZES.base,
-        backgroundColor: COLORS.white 
+        backgroundColor: COLORS.white
     },
     headerButton: { padding: SIZES.base },
     headerTitle: { ...FONTS.h2 },
@@ -187,24 +184,24 @@ const styles = StyleSheet.create({
     searchIcon: { marginHorizontal: SIZES.base * 1.5 },
     searchInput: { flex: 1, height: 44, ...FONTS.body3 },
     viewModeButton: { padding: SIZES.base, marginLeft: SIZES.base },
-    listContainer: { 
+    listContainer: {
         padding: SIZES.base,
-        backgroundColor: COLORS.background, // Thêm màu nền cho list
+        backgroundColor: COLORS.background,
     },
     emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
-    // Modal Styles
     modalContainer: { flex: 1, backgroundColor: COLORS.white },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
     modalTitle: { ...FONTS.h2 },
     modalContent: { flex: 1, padding: SIZES.padding },
-    modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray, justifyContent: 'flex-end'},
+    modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray, justifyContent: 'flex-end' },
     inputLabel: { ...FONTS.body3, color: COLORS.textMuted, marginBottom: SIZES.base, fontWeight: '600' },
     input: { height: 50, backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.body3, marginBottom: SIZES.itemSpacing },
+    inputDisabled: { backgroundColor: COLORS.lightGray, color: COLORS.textMuted },
     statusSelectContainer: { flexDirection: 'row', borderRadius: SIZES.radius, overflow: 'hidden' },
     statusSelectButton: { flex: 1, padding: SIZES.padding, alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
     statusSelectButtonActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
     statusSelectText: { ...FONTS.body3, fontWeight: '600', color: COLORS.textDark },
-    statusSelectTextActive: { color: COLORS.white }
+    statusSelectTextActive: { color: COLORS.white },
 });
 
 export default QuanLyTranhScreen;
