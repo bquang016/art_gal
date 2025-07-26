@@ -1,3 +1,4 @@
+// src/screens/QuanLyTaiKhoanScreen.js
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput,
@@ -10,19 +11,19 @@ import AccountListItem from '../components/AccountListItem';
 
 const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [accounts, setAccounts] = useState([]);
-    
+
     // Modal States
     const [isFormModalVisible, setFormModalVisible] = useState(false);
     const [isResetModalVisible, setResetModalVisible] = useState(false);
-    
+
     const [modalMode, setModalMode] = useState('add');
     const [editingAccount, setEditingAccount] = useState(null);
-    const [newPassword, setNewPassword] = useState({ pass: '', confirm: ''});
+    const [newPassword, setNewPassword] = useState({ pass: '', confirm: '' });
 
     useEffect(() => {
         api.getAccounts().then(setAccounts);
     }, []);
-    
+
     const handleOpenAddModal = () => {
         setModalMode('add');
         setEditingAccount({ employeeName: '', username: '', email: '', role: 'Nhân viên', status: 'Hoạt động' });
@@ -34,10 +35,10 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         setEditingAccount({ ...account });
         setFormModalVisible(true);
     };
-    
+
     const handleOpenResetModal = (account) => {
         setEditingAccount(account);
-        setNewPassword({ pass: '', confirm: ''});
+        setNewPassword({ pass: '', confirm: '' });
         setResetModalVisible(true);
     };
 
@@ -48,7 +49,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         }
 
         if (modalMode === 'add') {
-            const newAccount = {...editingAccount, id: `acc${Date.now()}`};
+            const newAccount = { ...editingAccount, id: `acc${Date.now()}` };
             setAccounts(prev => [newAccount, ...prev]);
         } else {
             setAccounts(prev => prev.map(acc => acc.id === editingAccount.id ? editingAccount : acc));
@@ -57,13 +58,13 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         Alert.alert("Thành công", `Đã ${modalMode === 'add' ? 'thêm' : 'cập nhật'} tài khoản.`);
         setFormModalVisible(false);
     };
-    
+
     const handlePasswordReset = () => {
-        if(newPassword.pass.length < 6) {
+        if (newPassword.pass.length < 6) {
             Alert.alert("Lỗi", "Mật khẩu mới phải có ít nhất 6 ký tự.");
             return;
         }
-        if(newPassword.pass !== newPassword.confirm) {
+        if (newPassword.pass !== newPassword.confirm) {
             Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp.");
             return;
         }
@@ -83,48 +84,58 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                 {editingAccount && (
                     <ScrollView style={styles.modalContent}>
                         <Text style={styles.inputLabel}>Tên nhân viên *</Text>
-                        <TextInput style={styles.input} value={editingAccount.employeeName} onChangeText={text => setEditingAccount({...editingAccount, employeeName: text})} />
-                        
+                        <TextInput style={styles.input} value={editingAccount.employeeName} onChangeText={text => setEditingAccount({ ...editingAccount, employeeName: text })} />
+
                         <Text style={styles.inputLabel}>Tên đăng nhập *</Text>
-                        <TextInput style={[styles.input, modalMode === 'edit' && styles.inputDisabled]} value={editingAccount.username} onChangeText={text => setEditingAccount({...editingAccount, username: text})} editable={modalMode === 'add'} />
-                        
+                        <TextInput style={[styles.input, modalMode === 'edit' && styles.inputDisabled]} value={editingAccount.username} onChangeText={text => setEditingAccount({ ...editingAccount, username: text })} editable={modalMode === 'add'} />
+
                         <Text style={styles.inputLabel}>Email *</Text>
-                        <TextInput style={styles.input} value={editingAccount.email} onChangeText={text => setEditingAccount({...editingAccount, email: text})} keyboardType="email-address"/>
+                        <TextInput style={styles.input} value={editingAccount.email} onChangeText={text => setEditingAccount({ ...editingAccount, email: text })} keyboardType="email-address" />
 
                         <Text style={styles.inputLabel}>Vai trò</Text>
                         <View style={styles.statusSelectContainer}>
-                            <TouchableOpacity onPress={() => setEditingAccount({...editingAccount, role: 'Nhân viên'})} style={[styles.statusSelectButton, editingAccount.role === 'Nhân viên' && {backgroundColor: COLORS.info}]}>
-                                <Text style={[styles.statusSelectText, editingAccount.role === 'Nhân viên' && {color: COLORS.white}]}>Nhân viên</Text>
+                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, role: 'Nhân viên' })} style={[styles.statusSelectButton, editingAccount.role === 'Nhân viên' && { backgroundColor: COLORS.info }]}>
+                                <Text style={[styles.statusSelectText, editingAccount.role === 'Nhân viên' && { color: COLORS.white }]}>Nhân viên</Text>
                             </TouchableOpacity>
-                             <TouchableOpacity onPress={() => setEditingAccount({...editingAccount, role: 'Admin'})} style={[styles.statusSelectButton, editingAccount.role === 'Admin' && {backgroundColor: COLORS.primary}]}>
-                                <Text style={[styles.statusSelectText, editingAccount.role === 'Admin' && {color: COLORS.white}]}>Admin</Text>
+                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, role: 'Admin' })} style={[styles.statusSelectButton, editingAccount.role === 'Admin' && { backgroundColor: COLORS.primary }]}>
+                                <Text style={[styles.statusSelectText, editingAccount.role === 'Admin' && { color: COLORS.white }]}>Admin</Text>
                             </TouchableOpacity>
                         </View>
 
                         <Text style={styles.inputLabel}>Trạng thái</Text>
-                         <View style={styles.statusSelectContainer}>
-                            <TouchableOpacity onPress={() => setEditingAccount({...editingAccount, status: 'Hoạt động'})} style={[styles.statusSelectButton, editingAccount.status === 'Hoạt động' && {backgroundColor: COLORS.success}]}>
-                                <Text style={[styles.statusSelectText, editingAccount.status === 'Hoạt động' && {color: COLORS.white}]}>Hoạt động</Text>
+                        <View style={styles.statusSelectContainer}>
+                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, status: 'Hoạt động' })} style={[styles.statusSelectButton, editingAccount.status === 'Hoạt động' && { backgroundColor: COLORS.success }]}>
+                                <Text style={[styles.statusSelectText, editingAccount.status === 'Hoạt động' && { color: COLORS.white }]}>Hoạt động</Text>
                             </TouchableOpacity>
-                             <TouchableOpacity onPress={() => setEditingAccount({...editingAccount, status: 'Dừng hoạt động'})} style={[styles.statusSelectButton, editingAccount.status === 'Dừng hoạt động' && {backgroundColor: COLORS.textMuted}]}>
-                                <Text style={[styles.statusSelectText, editingAccount.status === 'Dừng hoạt động' && {color: COLORS.white}]}>Dừng hoạt động</Text>
+                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, status: 'Dừng hoạt động' })} style={[styles.statusSelectButton, editingAccount.status === 'Dừng hoạt động' && { backgroundColor: COLORS.textMuted }]}>
+                                <Text style={[styles.statusSelectText, editingAccount.status === 'Dừng hoạt động' && { color: COLORS.white }]}>Dừng hoạt động</Text>
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
                 )}
-                 <View style={styles.modalFooter}>
+                <View style={styles.modalFooter}>
                     <Button title="Lưu" onPress={handleSave} color={COLORS.primary} />
                 </View>
             </SafeAreaView>
         </Modal>
     );
-
+    
+    // SỬA MỤC 4: Sửa lại modal đổi mật khẩu
     const renderResetPasswordModal = () => (
-        <Modal visible={isResetModalVisible} animationType="fade" transparent={true}>
-            <View style={styles.centeredView}>
-                <View style={styles.resetModalView}>
+        <Modal visible={isResetModalVisible} animationType="slide">
+            <SafeAreaView style={styles.modalContainer}>
+                <View style={styles.modalHeader}>
                     <Text style={styles.modalTitle}>Đặt lại mật khẩu</Text>
-                    <Text style={styles.modalSubText}>Cho tài khoản: <Text style={{fontWeight: 'bold'}}>{editingAccount?.username}</Text></Text>
+                     <TouchableOpacity onPress={() => setResetModalVisible(false)}>
+                        <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.modalContent}>
+                    <Text style={styles.modalSubText}>
+                        Tài khoản: <Text style={{fontWeight: 'bold'}}>{editingAccount?.username}</Text>
+                    </Text>
+                    
+                    <Text style={styles.inputLabel}>Mật khẩu mới</Text>
                     <TextInput 
                         style={styles.input} 
                         placeholder="Nhập mật khẩu mới"
@@ -132,24 +143,25 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                         value={newPassword.pass}
                         onChangeText={text => setNewPassword({...newPassword, pass: text})}
                     />
+                    
+                    <Text style={styles.inputLabel}>Xác nhận mật khẩu</Text>
                      <TextInput 
                         style={styles.input} 
-                        placeholder="Xác nhận mật khẩu mới"
+                        placeholder="Nhập lại mật khẩu mới"
                         secureTextEntry
                         value={newPassword.confirm}
                         onChangeText={text => setNewPassword({...newPassword, confirm: text})}
                     />
-                    <View style={styles.modalButtonContainer}>
-                        <Button title="Hủy" onPress={() => setResetModalVisible(false)} color={COLORS.textMuted} />
-                        <Button title="Lưu" onPress={handlePasswordReset} color={COLORS.primary} />
-                    </View>
                 </View>
-            </View>
+                 <View style={styles.modalFooter}>
+                    <Button title="Lưu mật khẩu mới" onPress={handlePasswordReset} color={COLORS.primary} />
+                </View>
+            </SafeAreaView>
         </Modal>
     );
-    
+    // Kết thúc sửa mục 4
+
     return (
-        // SỬA LỖI: Bọc bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
@@ -160,7 +172,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                     <Ionicons name="add" size={32} color={COLORS.primary} />
                 </TouchableOpacity>
             </View>
-            
+
             <View style={styles.content}>
                 <View style={styles.warningBox}>
                     <Ionicons name="shield-checkmark-outline" size={24} color={COLORS.warning} />
@@ -182,28 +194,25 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI: container là SafeAreaView
     container: { flex: 1, backgroundColor: COLORS.white },
-    // SỬA LỖI: Bỏ padding top
-    header: { 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        paddingHorizontal: SIZES.padding, 
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: SIZES.padding,
         paddingVertical: SIZES.base,
-        borderBottomWidth: 1, 
-        borderBottomColor: COLORS.lightGray 
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.lightGray
     },
     headerButton: { padding: SIZES.base },
     headerTitle: { ...FONTS.h2 },
     content: {
         flex: 1,
-        backgroundColor: COLORS.background, // Thêm màu nền cho nội dung
+        backgroundColor: COLORS.background,
     },
     warningBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: `${COLORS.warning}20`, padding: SIZES.padding, margin: SIZES.padding, borderRadius: SIZES.radius },
     warningText: { ...FONTS.body3, color: '#856404', marginLeft: SIZES.base, flex: 1 },
     listContainer: { paddingHorizontal: SIZES.padding },
-    // Form Modal Styles
     modalContainer: { flex: 1 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
     modalTitle: { ...FONTS.h2 },
@@ -215,11 +224,7 @@ const styles = StyleSheet.create({
     statusSelectContainer: { flexDirection: 'row', borderRadius: SIZES.radius, overflow: 'hidden', marginBottom: SIZES.itemSpacing },
     statusSelectButton: { flex: 1, padding: SIZES.padding, alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
     statusSelectText: { ...FONTS.body3, fontWeight: '600', color: COLORS.textDark },
-    // Reset Password Modal Styles
-    centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
-    resetModalView: { margin: 20, backgroundColor: 'white', borderRadius: SIZES.radius * 2, padding: SIZES.padding * 1.5, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5, width: '90%' },
-    modalSubText: { ...FONTS.body3, color: COLORS.textMuted, marginBottom: SIZES.padding, textAlign: 'center' },
-    modalButtonContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: SIZES.padding },
+    modalSubText: { ...FONTS.body3, color: COLORS.textMuted, marginBottom: SIZES.padding*2 },
 });
 
 export default QuanLyTaiKhoanScreen;
