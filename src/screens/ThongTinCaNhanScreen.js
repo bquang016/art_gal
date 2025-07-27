@@ -1,45 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TextInput,
-    TouchableOpacity, SafeAreaView, ScrollView, Button, Alert
+    TouchableOpacity, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 
 const ThongTinCaNhanScreen = ({ navigation }) => {
     const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [password, setPassword] = useState({ current: '', new: '', confirm: '' });
 
-    useEffect(() => {
-        api.getCurrentUser().then(setUser);
-    }, []);
+    useFocusEffect(
+      useCallback(() => {
+        const fetchCurrentUser = async () => {
+            setLoading(true);
+            try {
+                // Backend API này chưa tồn tại, chúng ta cần tạo nó.
+                // Tạm thời sẽ dùng dữ liệu giả lập.
+                // const response = await apiService.get('/profile/me'); 
+                const mockUser = {
+                    name: 'Quang Đẹp Trai',
+                    email: 'admin@artgallery.com',
+                    phone: '0987654321',
+                    role: 'Admin'
+                };
+                setUser(mockUser);
+            } catch (error) {
+                console.error("Failed to fetch current user:", error);
+                Alert.alert("Lỗi", "Không thể tải thông tin cá nhân.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCurrentUser();
+      }, [])
+    );
 
     const handleUpdateInfo = () => {
-        // Logic lưu thông tin (mô phỏng)
-        Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
+        Alert.alert("Tính năng đang phát triển", "Chức năng cập nhật thông tin sẽ được bổ sung sau.");
     };
 
     const handleChangePassword = () => {
-        if (!password.current || !password.new || !password.confirm) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường mật khẩu.");
-            return;
-        }
-        if (password.new.length < 6) {
-            Alert.alert("Lỗi", "Mật khẩu mới phải có ít nhất 6 ký tự.");
-            return;
-        }
-        if (password.new !== password.confirm) {
-            Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp.");
-            return;
-        }
-        // Logic đổi mật khẩu (mô phỏng)
-        Alert.alert("Thành công", "Đã đổi mật khẩu thành công.");
-        setPassword({ current: '', new: '', confirm: '' }); // Reset form
+        Alert.alert("Tính năng đang phát triển", "Chức năng đổi mật khẩu sẽ được bổ sung sau.");
     };
 
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            </SafeAreaView>
+        );
+    }
+    
     if (!user) {
-        return <SafeAreaView style={styles.container}><Text>Đang tải...</Text></SafeAreaView>;
+         return (
+             <SafeAreaView style={styles.container}>
+                <Text style={{textAlign: 'center'}}>Không thể tải dữ liệu người dùng.</Text>
+            </SafeAreaView>
+         );
     }
 
     return (
@@ -55,15 +77,14 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.profileCard}>
                     <Ionicons name="person-circle" size={100} color={COLORS.primary} />
-                    <Text style={styles.profileName}>{user.employeeName}</Text>
+                    <Text style={styles.profileName}>{user.name}</Text>
                     <Text style={styles.profileRole}>{user.role}</Text>
                 </View>
 
-                {/* Phần thông tin chung */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Thông tin chung</Text>
                     <Text style={styles.inputLabel}>Tên nhân viên</Text>
-                    <TextInput style={styles.input} value={user.employeeName} onChangeText={text => setUser({...user, employeeName: text})}/>
+                    <TextInput style={styles.input} value={user.name} onChangeText={text => setUser({...user, name: text})}/>
                     
                     <Text style={styles.inputLabel}>Email</Text>
                     <TextInput style={styles.input} value={user.email} onChangeText={text => setUser({...user, email: text})}/>
@@ -76,7 +97,6 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 </View>
 
-                {/* Phần đổi mật khẩu */}
                  <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Đổi mật khẩu</Text>
                     <Text style={styles.inputLabel}>Mật khẩu hiện tại</Text>

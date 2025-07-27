@@ -1,18 +1,18 @@
-// src/screens/QuanLyTaiKhoanScreen.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput,
-    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert
+    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import AccountListItem from '../components/AccountListItem';
 
 const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [accounts, setAccounts] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // Modal States
     const [isFormModalVisible, setFormModalVisible] = useState(false);
     const [isResetModalVisible, setResetModalVisible] = useState(false);
 
@@ -20,13 +20,36 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [editingAccount, setEditingAccount] = useState(null);
     const [newPassword, setNewPassword] = useState({ pass: '', confirm: '' });
 
-    useEffect(() => {
-        api.getAccounts().then(setAccounts);
-    }, []);
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+        useCallback(() => {
+            const fetchAccounts = async () => {
+                setLoading(true);
+                try {
+                    const response = await apiService.get('/users');
+                    const formattedAccounts = response.data.map(acc => ({
+                        id: acc.id.toString(),
+                        employeeName: acc.name,
+                        username: acc.username,
+                        email: acc.email,
+                        role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
+                        status: 'Hoạt động' // Backend chưa có trường status, tạm mock
+                    }));
+                    setAccounts(formattedAccounts);
+                } catch (error) {
+                    console.error("Failed to fetch accounts:", error.response?.data || error.message);
+                    Alert.alert("Lỗi", "Không thể tải danh sách tài khoản. Bạn có phải là Admin không?");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchAccounts();
+        }, [])
+    );
 
     const handleOpenAddModal = () => {
         setModalMode('add');
-        setEditingAccount({ employeeName: '', username: '', email: '', role: 'Nhân viên', status: 'Hoạt động' });
+        setEditingAccount({ employeeName: '', username: '', email: '', password: '', role: 'Nhân viên', status: 'Hoạt động' });
         setFormModalVisible(true);
     };
 
@@ -42,24 +65,57 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         setResetModalVisible(true);
     };
 
-    const handleSave = () => {
-        if (!editingAccount.employeeName || !editingAccount.username || !editingAccount.email) {
+    const handleSave = async () => {
+        if (!editingAccount || !editingAccount.employeeName || !editingAccount.username || !editingAccount.email) {
             Alert.alert("Lỗi", "Vui lòng điền các trường bắt buộc.");
             return;
         }
-
-        if (modalMode === 'add') {
-            const newAccount = { ...editingAccount, id: `acc${Date.now()}` };
-            setAccounts(prev => [newAccount, ...prev]);
-        } else {
-            setAccounts(prev => prev.map(acc => acc.id === editingAccount.id ? editingAccount : acc));
+        if (modalMode === 'add' && !editingAccount.password) {
+            Alert.alert("Lỗi", "Vui lòng nhập mật khẩu cho tài khoản mới.");
+            return;
         }
 
-        Alert.alert("Thành công", `Đã ${modalMode === 'add' ? 'thêm' : 'cập nhật'} tài khoản.`);
-        setFormModalVisible(false);
+        try {
+            if (modalMode === 'add') {
+                const payload = {
+                    name: editingAccount.employeeName,
+                    username: editingAccount.username,
+                    email: editingAccount.email,
+                    password: editingAccount.password,
+                    roles: [editingAccount.role === 'Admin' ? 'ADMIN' : 'NHANVIEN']
+                };
+                await apiService.post('/users/create', payload);
+            } else {
+                 const payload = {
+                    name: editingAccount.employeeName,
+                    email: editingAccount.email,
+                    roles: [editingAccount.role === 'Admin' ? 'ADMIN' : 'NHANVIEN']
+                };
+                await apiService.put(`/users/${editingAccount.id}`, payload);
+            }
+            Alert.alert("Thành công", `Đã ${modalMode === 'add' ? 'thêm' : 'cập nhật'} tài khoản.`);
+            setFormModalVisible(false);
+            
+            // Tải lại dữ liệu sau khi lưu
+            const response = await apiService.get('/users');
+             const formattedAccounts = response.data.map(acc => ({
+                id: acc.id.toString(),
+                employeeName: acc.name,
+                username: acc.username,
+                email: acc.email,
+                role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
+                status: 'Hoạt động'
+            }));
+            setAccounts(formattedAccounts);
+
+        } catch (error) {
+            const errorMessage = error.response?.data?.message || "Thao tác thất bại.";
+            console.error("Save account error:", error.response?.data || error.message);
+            Alert.alert("Lỗi", errorMessage);
+        }
     };
 
-    const handlePasswordReset = () => {
+    const handlePasswordReset = async () => {
         if (newPassword.pass.length < 6) {
             Alert.alert("Lỗi", "Mật khẩu mới phải có ít nhất 6 ký tự.");
             return;
@@ -68,8 +124,15 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
             Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp.");
             return;
         }
-        Alert.alert("Thành công", `Đã đặt lại mật khẩu cho ${editingAccount.username}.`);
-        setResetModalVisible(false);
+        try {
+            const payload = { newPassword: newPassword.pass };
+            await apiService.patch(`/users/${editingAccount.id}/reset-password`, payload);
+            Alert.alert("Thành công", `Đã đặt lại mật khẩu cho ${editingAccount.username}.`);
+            setResetModalVisible(false);
+        } catch(error) {
+            console.error("Reset password error:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Đặt lại mật khẩu thất bại.");
+        }
     };
 
     const renderFormModal = () => (
@@ -88,6 +151,13 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
 
                         <Text style={styles.inputLabel}>Tên đăng nhập *</Text>
                         <TextInput style={[styles.input, modalMode === 'edit' && styles.inputDisabled]} value={editingAccount.username} onChangeText={text => setEditingAccount({ ...editingAccount, username: text })} editable={modalMode === 'add'} />
+                        
+                        {modalMode === 'add' && (
+                            <>
+                                <Text style={styles.inputLabel}>Mật khẩu *</Text>
+                                <TextInput style={styles.input} placeholder="Nhập mật khẩu" secureTextEntry value={editingAccount.password} onChangeText={text => setEditingAccount({ ...editingAccount, password: text })} />
+                            </>
+                        )}
 
                         <Text style={styles.inputLabel}>Email *</Text>
                         <TextInput style={styles.input} value={editingAccount.email} onChangeText={text => setEditingAccount({ ...editingAccount, email: text })} keyboardType="email-address" />
@@ -101,16 +171,6 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                                 <Text style={[styles.statusSelectText, editingAccount.role === 'Admin' && { color: COLORS.white }]}>Admin</Text>
                             </TouchableOpacity>
                         </View>
-
-                        <Text style={styles.inputLabel}>Trạng thái</Text>
-                        <View style={styles.statusSelectContainer}>
-                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, status: 'Hoạt động' })} style={[styles.statusSelectButton, editingAccount.status === 'Hoạt động' && { backgroundColor: COLORS.success }]}>
-                                <Text style={[styles.statusSelectText, editingAccount.status === 'Hoạt động' && { color: COLORS.white }]}>Hoạt động</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, status: 'Dừng hoạt động' })} style={[styles.statusSelectButton, editingAccount.status === 'Dừng hoạt động' && { backgroundColor: COLORS.textMuted }]}>
-                                <Text style={[styles.statusSelectText, editingAccount.status === 'Dừng hoạt động' && { color: COLORS.white }]}>Dừng hoạt động</Text>
-                            </TouchableOpacity>
-                        </View>
                     </ScrollView>
                 )}
                 <View style={styles.modalFooter}>
@@ -120,7 +180,6 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         </Modal>
     );
     
-    // SỬA MỤC 4: Sửa lại modal đổi mật khẩu
     const renderResetPasswordModal = () => (
         <Modal visible={isResetModalVisible} animationType="slide">
             <SafeAreaView style={styles.modalContainer}>
@@ -159,7 +218,6 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
             </SafeAreaView>
         </Modal>
     );
-    // Kết thúc sửa mục 4
 
     return (
         <SafeAreaView style={styles.container}>
@@ -179,12 +237,16 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                     <Text style={styles.warningText}>Chức năng này chỉ dành cho Quản trị viên.</Text>
                 </View>
 
-                <FlatList
-                    data={accounts}
-                    renderItem={({ item }) => <AccountListItem item={item} onEdit={handleOpenEditModal} onResetPassword={handleOpenResetModal} />}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.listContainer}
-                />
+                {loading ? (
+                    <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+                ) : (
+                    <FlatList
+                        data={accounts}
+                        renderItem={({ item }) => <AccountListItem item={item} onEdit={handleOpenEditModal} onResetPassword={handleOpenResetModal} />}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={styles.listContainer}
+                    />
+                )}
             </View>
 
             {renderFormModal()}

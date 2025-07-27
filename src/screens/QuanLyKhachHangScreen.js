@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput,
-    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert
+    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import CustomerListItem from '../components/CustomerListItem';
 import StatusBadge from '../components/StatusBadge';
@@ -13,6 +14,7 @@ const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'curr
 
 const QuanLyKhachHangScreen = ({ navigation }) => {
     const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     
     const [isFormModalVisible, setFormModalVisible] = useState(false);
@@ -22,15 +24,30 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [purchaseHistory, setPurchaseHistory] = useState([]);
 
-    useEffect(() => {
-        api.getCustomers().then(setCustomers);
-    }, []);
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+      useCallback(() => {
+        const fetchCustomers = async () => {
+            setLoading(true);
+            try {
+                const response = await apiService.get('/customers');
+                setCustomers(response.data);
+            } catch (error) {
+                console.error("Failed to fetch customers:", error);
+                Alert.alert("Lỗi", "Không thể tải danh sách khách hàng.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchCustomers();
+      }, [])
+    );
 
     const filteredCustomers = useMemo(() => {
         return customers.filter(c =>
             c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            c.phone.includes(searchQuery) ||
-            c.email.toLowerCase().includes(searchQuery.toLowerCase())
+            (c.phone && c.phone.includes(searchQuery)) ||
+            (c.email && c.email.toLowerCase().includes(searchQuery.toLowerCase()))
         );
     }, [customers, searchQuery]);
 
@@ -47,27 +64,35 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     };
 
     const handleViewHistory = async (customer) => {
+        // TODO: API cho chức năng này chưa được xây dựng ở backend
         setEditingCustomer(customer);
-        const history = await api.getPurchaseHistory(customer.id);
-        setPurchaseHistory(history);
+        setPurchaseHistory([]); 
         setHistoryModalVisible(true);
+        Alert.alert("Thông báo", "API cho chức năng xem lịch sử mua hàng chưa được xây dựng.");
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!editingCustomer || !editingCustomer.name || !editingCustomer.phone) {
             Alert.alert("Lỗi", "Vui lòng điền Tên và Số điện thoại.");
             return;
         }
 
-        if (modalMode === 'add') {
-            const newCustomer = { ...editingCustomer, id: `KH${Date.now()}` };
-            setCustomers(prev => [newCustomer, ...prev]);
-            Alert.alert("Thành công", `Đã thêm khách hàng: ${newCustomer.name}`);
-        } else {
-            setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? editingCustomer : c));
-            Alert.alert("Thành công", `Đã cập nhật khách hàng: ${editingCustomer.name}`);
+        try {
+            if (modalMode === 'add') {
+                await apiService.post('/customers', editingCustomer);
+                Alert.alert("Thành công", `Đã thêm khách hàng: ${editingCustomer.name}`);
+            } else {
+                await apiService.put(`/customers/${editingCustomer.id}`, editingCustomer);
+                Alert.alert("Thành công", `Đã cập nhật khách hàng: ${editingCustomer.name}`);
+            }
+            setFormModalVisible(false);
+            // Tải lại danh sách sau khi lưu
+            const response = await apiService.get('/customers');
+            setCustomers(response.data);
+        } catch(error) {
+            console.error("Failed to save customer:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Thao tác thất bại.");
         }
-        setFormModalVisible(false);
     };
 
     const renderFormModal = () => (
@@ -93,23 +118,19 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                         <Text style={styles.inputLabel}>Địa chỉ</Text>
                         <TextInput style={[styles.input, {height: 80, textAlignVertical: 'top'}]} value={editingCustomer.address} onChangeText={text => setEditingCustomer({...editingCustomer, address: text})} multiline />
 
-                        {modalMode === 'edit' && (
-                            <>
-                                <Text style={styles.inputLabel}>Trạng thái</Text>
-                                <View style={styles.statusSelectContainer}>
-                                    <TouchableOpacity 
-                                        style={[styles.statusSelectButton, editingCustomer.status === 'Hoạt động' && styles.statusButtonActiveSuccess]}
-                                        onPress={() => setEditingCustomer({...editingCustomer, status: 'Hoạt động'})}>
-                                        <Text style={[styles.statusSelectText, editingCustomer.status === 'Hoạt động' && styles.statusSelectTextActive]}>Hoạt động</Text>
-                                    </TouchableOpacity>
-                                     <TouchableOpacity 
-                                        style={[styles.statusSelectButton, editingCustomer.status === 'Dừng hoạt động' && styles.statusButtonActiveMuted]}
-                                        onPress={() => setEditingCustomer({...editingCustomer, status: 'Dừng hoạt động'})}>
-                                        <Text style={[styles.statusSelectText, editingCustomer.status === 'Dừng hoạt động' && styles.statusSelectTextActive]}>Dừng hoạt động</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </>
-                        )}
+                        <Text style={styles.inputLabel}>Trạng thái</Text>
+                        <View style={styles.statusSelectContainer}>
+                            <TouchableOpacity 
+                                style={[styles.statusSelectButton, editingCustomer.status === 'Hoạt động' && styles.statusButtonActiveSuccess]}
+                                onPress={() => setEditingCustomer({...editingCustomer, status: 'Hoạt động'})}>
+                                <Text style={[styles.statusSelectText, editingCustomer.status === 'Hoạt động' && styles.statusSelectTextActive]}>Hoạt động</Text>
+                            </TouchableOpacity>
+                             <TouchableOpacity 
+                                style={[styles.statusSelectButton, editingCustomer.status === 'Dừng hoạt động' && styles.statusButtonActiveMuted]}
+                                onPress={() => setEditingCustomer({...editingCustomer, status: 'Dừng hoạt động'})}>
+                                <Text style={[styles.statusSelectText, editingCustomer.status === 'Dừng hoạt động' && styles.statusSelectTextActive]}>Dừng hoạt động</Text>
+                            </TouchableOpacity>
+                        </View>
                     </ScrollView>
                 )}
                 <View style={styles.modalFooter}>
@@ -132,7 +153,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                     <Text style={styles.historyCustomerName}>{editingCustomer?.name}</Text>
                     <FlatList
                         data={purchaseHistory}
-                        keyExtractor={item => item.id}
+                        keyExtractor={item => item.id.toString()}
                         renderItem={({item}) => (
                             <View style={styles.historyItem}>
                                 <View>
@@ -153,7 +174,6 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     );
 
     return (
-        // SỬA LỖI: Bọc bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
@@ -170,13 +190,17 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                     <TextInput style={styles.searchInput} placeholder="Tìm khách hàng..." value={searchQuery} onChangeText={setSearchQuery}/>
                 </View>
             </View>
-            <FlatList
-                data={filteredCustomers}
-                renderItem={({ item }) => <CustomerListItem item={item} onEdit={handleOpenEditModal} onViewHistory={handleViewHistory} />}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={<Text style={styles.emptyText}>Không có khách hàng nào.</Text>}
-            />
+            {loading ? (
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    data={filteredCustomers}
+                    renderItem={({ item }) => <CustomerListItem item={item} onEdit={handleOpenEditModal} onViewHistory={handleViewHistory} />}
+                    keyExtractor={item => item.id.toString()}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Không có khách hàng nào.</Text>}
+                />
+            )}
             {renderFormModal()}
             {renderHistoryModal()}
         </SafeAreaView>
@@ -184,9 +208,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI: container là SafeAreaView
     container: { flex: 1, backgroundColor: COLORS.white },
-    // SỬA LỖI: Bỏ padding top
     header: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
@@ -209,10 +231,9 @@ const styles = StyleSheet.create({
     searchInput: { flex: 1, ...FONTS.body3 },
     listContainer: { 
         padding: SIZES.padding,
-        backgroundColor: COLORS.background // Thêm màu nền cho list
+        backgroundColor: COLORS.background
     },
     emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
-    // Modal Styles
     modalContainer: { flex: 1 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
     modalTitle: { ...FONTS.h2 },
@@ -220,13 +241,11 @@ const styles = StyleSheet.create({
     modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray },
     inputLabel: { ...FONTS.h4, color: COLORS.textMuted, marginBottom: SIZES.base },
     input: { height: 50, backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.body3, marginBottom: SIZES.itemSpacing },
-    // History Modal Styles
     historyCustomerName: { ...FONTS.h3, marginBottom: SIZES.padding },
     historyItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SIZES.padding, borderBottomWidth: 1, borderColor: COLORS.lightGray },
     historyOrderId: { ...FONTS.h4, color: COLORS.primary },
     historyDate: { ...FONTS.body4, color: COLORS.textMuted },
     historyTotal: { ...FONTS.h4, marginBottom: SIZES.base },
-    // Styles cho phần chọn trạng thái trong Modal
     statusSelectContainer: { flexDirection: 'row', borderRadius: SIZES.radius, overflow: 'hidden' },
     statusSelectButton: { flex: 1, padding: SIZES.padding, alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
     statusButtonActiveSuccess: { backgroundColor: COLORS.success, borderColor: COLORS.success },

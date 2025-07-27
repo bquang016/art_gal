@@ -1,26 +1,46 @@
-// src/screens/QuanLyDanhMucScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, FlatList,
-    Modal, SafeAreaView, TextInput, Button, Alert
+    Modal, SafeAreaView, TextInput, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import CategoryListItem from '../components/CategoryListItem';
-
-// Dữ liệu mẫu
-const sampleGenres = [
-    { id: 'gen01', name: 'Sơn dầu', description: 'Tranh được vẽ bằng chất liệu sơn dầu, có độ bền cao.', paintingCount: 3, status: 'Hiển thị' },
-    { id: 'gen02', name: 'Trừu tượng', description: 'Tranh không mô tả vật thể cụ thể.', paintingCount: 2, status: 'Hiển thị' },
-];
+import apiService from '../api/apiService';
 
 const QuanLyDanhMucScreen = ({ navigation }) => {
-    const [genres, setGenres] = useState(sampleGenres);
-
-    // State cho Modal
+    const [categories, setCategories] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [isModalVisible, setModalVisible] = useState(false);
     const [modalMode, setModalMode] = useState('add');
     const [editingItem, setEditingItem] = useState(null);
+
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+      useCallback(() => {
+        const fetchCategories = async () => {
+            setLoading(true);
+            try {
+                const response = await apiService.get('/categories');
+                // Backend DTO không có paintingCount và status, ta mock tạm ở đây
+                const dataWithMockFields = response.data.map(c => ({
+                    ...c,
+                    paintingCount: 0, 
+                    status: 'Hiển thị'
+                }));
+                setCategories(dataWithMockFields);
+            } catch (error) {
+                Alert.alert("Lỗi", "Không thể tải danh sách danh mục.");
+                console.error("Fetch categories error:", error.response?.data || error.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCategories();
+      }, [])
+    );
 
     const handleOpenAddModal = () => {
         setModalMode('add');
@@ -34,23 +54,38 @@ const QuanLyDanhMucScreen = ({ navigation }) => {
         setModalVisible(true);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!editingItem || !editingItem.name) {
             Alert.alert("Lỗi", "Tên thể loại không được để trống.");
             return;
         }
 
-        if (modalMode === 'add') {
-            const newItem = { ...editingItem, id: `gen${Date.now()}`, paintingCount: 0 };
-            setGenres(prev => [newItem, ...prev]);
-            Alert.alert("Thành công", "Đã thêm mới thể loại.");
-        } else {
-            setGenres(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
-            Alert.alert("Thành công", "Đã cập nhật thể loại.");
-        }
+        try {
+            const payload = {
+                name: editingItem.name,
+                description: editingItem.description,
+            };
 
-        setModalVisible(false);
-        setEditingItem(null);
+            if (modalMode === 'add') {
+                await apiService.post('/categories', payload);
+                Alert.alert("Thành công", "Đã thêm mới thể loại.");
+            } else {
+                await apiService.put(`/categories/${editingItem.id}`, payload);
+                Alert.alert("Thành công", "Đã cập nhật thể loại.");
+            }
+
+            setModalVisible(false);
+            setEditingItem(null);
+            
+            // Tải lại danh sách sau khi lưu
+            const response = await apiService.get('/categories');
+            const dataWithMockFields = response.data.map(c => ({...c, paintingCount: 0, status: 'Hiển thị' }));
+            setCategories(dataWithMockFields);
+
+        } catch (error) {
+            Alert.alert("Lỗi", "Thao tác thất bại.");
+            console.error("Save category error:", error.response?.data || error.message);
+        }
     };
 
     const renderFormModal = () => (
@@ -105,13 +140,19 @@ const QuanLyDanhMucScreen = ({ navigation }) => {
                     <Ionicons name="add" size={32} color={COLORS.primary} />
                 </TouchableOpacity>
             </View>
-            <FlatList
-                data={genres}
-                renderItem={({ item }) => <CategoryListItem item={item} onEdit={handleOpenEditModal} />}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={<Text style={styles.emptyText}>Không có dữ liệu.</Text>}
-            />
+            
+            {loading ? (
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    data={categories}
+                    renderItem={({ item }) => <CategoryListItem item={item} onEdit={handleOpenEditModal} />}
+                    keyExtractor={item => item.id.toString()}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Không có dữ liệu.</Text>}
+                />
+            )}
+            
             {renderFormModal()}
         </SafeAreaView>
     );

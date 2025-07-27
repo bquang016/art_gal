@@ -1,48 +1,76 @@
-// src/screens/TaoPhieuNhapScreen.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput,
-    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert
+    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import ImportListItem from '../components/ImportListItem';
-import CustomPicker from '../components/CustomPicker'; // Import component mới
+import CustomPicker from '../components/CustomPicker';
 
-const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
 
 const TaoPhieuNhapScreen = ({ navigation }) => {
     const [artists, setArtists] = useState([]);
     const [categories, setCategories] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isCreating, setIsCreating] = useState(false);
     const [selectedArtist, setSelectedArtist] = useState(null);
     const [notes, setNotes] = useState('');
     const [slipItems, setSlipItems] = useState([]);
     const [isModalVisible, setModalVisible] = useState(false);
     const [newItem, setNewItem] = useState(null);
 
-    useEffect(() => {
-        api.getArtists().then(setArtists);
-        api.getCategories().then(setCategories);
-    }, []);
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+        useCallback(() => {
+            const fetchData = async () => {
+                setLoading(true);
+                try {
+                    const [artistsRes, categoriesRes] = await Promise.all([
+                        apiService.get('/artists'),
+                        apiService.get('/categories')
+                    ]);
+                    setArtists(artistsRes.data);
+                    setCategories(categoriesRes.data);
+                } catch (error) {
+                    console.error("Failed to fetch data:", error);
+                    Alert.alert("Lỗi", "Không thể tải dữ liệu. Vui lòng thử lại.", [
+                        { text: 'OK', onPress: () => navigation.goBack() }
+                    ]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            fetchData();
+        }, [navigation])
+    );
 
     const handleOpenAddModal = () => {
+        if (categories.length === 0) {
+            Alert.alert("Lỗi", "Chưa có dữ liệu danh mục. Vui lòng tạo danh mục trước.");
+            return;
+        }
         setNewItem({
             name: '',
             importPrice: '',
             sellingPrice: '',
-            category: categories.length > 0 ? categories[0] : '',
-            material: '',
+            categoryId: categories[0].id, // Mặc định chọn category đầu tiên
+            material: 'Sơn dầu',
         });
         setModalVisible(true);
     };
 
     const handleAddItemToSlip = () => {
-        if (!newItem || !newItem.name || !newItem.importPrice) {
-            Alert.alert("Lỗi", "Vui lòng nhập Tên tranh và Giá nhập.");
+        if (!newItem || !newItem.name || !newItem.importPrice || !newItem.sellingPrice) {
+            Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin sản phẩm.");
             return;
         }
-        setSlipItems(prev => [...prev, { ...newItem, id: `item${Date.now()}` }]);
+        const category = categories.find(c => c.id === newItem.categoryId);
+        setSlipItems(prev => [...prev, { ...newItem, id: `item${Date.now()}`, category: category?.name }]);
         setModalVisible(false);
         setNewItem(null);
     };
@@ -51,27 +79,43 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
         setSlipItems(prev => prev.filter(item => item.id !== itemId));
     };
 
-    const handleCreateSlip = () => {
+    const handleCreateSlip = async () => {
         if (!selectedArtist || slipItems.length === 0) {
             Alert.alert("Lỗi", "Vui lòng chọn Nhà cung cấp và thêm ít nhất 1 sản phẩm.");
             return;
         }
-        Alert.alert("Xác nhận", `Tạo phiếu nhập từ họa sĩ ${selectedArtist} với ${slipItems.length} sản phẩm?`, [
-            { text: "Hủy" },
-            {
-                text: "OK", onPress: () => {
-                    Alert.alert("Thành công", "Đã tạo phiếu nhập thành công!");
-                    navigation.goBack();
-                }
-            }
-        ]);
+        
+        const payload = {
+            artistId: selectedArtist,
+            userId: 2, // ID của nhân viên đang đăng nhập, tạm mock là 2 (nhanvien)
+            notes: notes,
+            items: slipItems.map(item => ({
+                name: item.name,
+                importPrice: parseFloat(item.importPrice),
+                sellingPrice: parseFloat(item.sellingPrice),
+                categoryId: item.categoryId,
+                material: item.material,
+            }))
+        };
+        
+        try {
+            setIsCreating(true);
+            await apiService.post('/import-slips', payload);
+            Alert.alert("Thành công", "Đã tạo phiếu nhập thành công!", [
+                { text: 'OK', onPress: () => navigation.goBack() }
+            ]);
+        } catch (error) {
+            console.error("Failed to create import slip:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Tạo phiếu nhập thất bại.");
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     const totalValue = useMemo(() => slipItems.reduce((sum, item) => sum + parseFloat(item.importPrice || 0), 0), [slipItems]);
 
-    // Chuẩn bị dữ liệu cho CustomPicker
-    const artistData = artists.map(a => ({ label: a.name, value: a.name }));
-    const categoryData = categories.map(c => ({ label: c, value: c }));
+    const artistDataForPicker = artists.map(a => ({ label: a.name, value: a.id }));
+    const categoryDataForPicker = categories.map(c => ({ label: c.name, value: c.id }));
 
     const renderAddProductModal = () => (
         <Modal visible={isModalVisible} animationType="slide">
@@ -88,19 +132,18 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                         <TextInput style={styles.input} value={newItem.name} onChangeText={t => setNewItem({ ...newItem, name: t })} />
                         <Text style={styles.inputLabel}>Giá nhập (VND) *</Text>
                         <TextInput style={styles.input} value={String(newItem.importPrice)} onChangeText={t => setNewItem({ ...newItem, importPrice: t })} keyboardType="numeric" />
-                        <Text style={styles.inputLabel}>Giá bán dự kiến (VND)</Text>
+                        <Text style={styles.inputLabel}>Giá bán dự kiến (VND) *</Text>
                         <TextInput style={styles.input} value={String(newItem.sellingPrice)} onChangeText={t => setNewItem({ ...newItem, sellingPrice: t })} keyboardType="numeric" />
                         
-                        {/* Sử dụng CustomPicker cho Thể loại */}
                         <CustomPicker
-                            label="Thể loại"
-                            data={categoryData}
-                            selectedValue={newItem.category}
-                            onValueChange={val => setNewItem({ ...newItem, category: val })}
+                            label="Thể loại *"
+                            data={categoryDataForPicker}
+                            selectedValue={newItem.categoryId}
+                            onValueChange={val => setNewItem({ ...newItem, categoryId: val })}
                             placeholder="Chọn thể loại"
                         />
 
-                        <Text style={styles.inputLabel}>Chất liệu</Text>
+                        <Text style={styles.inputLabel}>Chất liệu *</Text>
                         <TextInput style={styles.input} value={newItem.material} onChangeText={t => setNewItem({ ...newItem, material: t })} />
                     </ScrollView>
                 )}
@@ -110,6 +153,14 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
             </SafeAreaView>
         </Modal>
     );
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -125,16 +176,15 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                 <FlatList
                     data={slipItems}
                     renderItem={({ item }) => <ImportListItem item={item} onRemove={() => handleRemoveItem(item.id)} />}
-                    keyExtractor={item => item.id}
+                    keyExtractor={item => item.id.toString()}
                     contentContainerStyle={{ padding: SIZES.padding }}
                     ListHeaderComponent={
                         <View style={styles.formContainer}>
                             <Text style={styles.sectionTitle}>Thông tin chung</Text>
                             
-                            {/* Sử dụng CustomPicker cho Nhà cung cấp */}
                             <CustomPicker
                                 label="Nhà cung cấp (Họa sĩ) *"
-                                data={artistData}
+                                data={artistDataForPicker}
                                 selectedValue={selectedArtist}
                                 onValueChange={(itemValue) => setSelectedArtist(itemValue)}
                                 placeholder="-- Chọn họa sĩ --"
@@ -164,8 +214,16 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                     <Text style={styles.totalLabel}>Tổng giá trị nhập</Text>
                     <Text style={styles.totalValue}>{formatCurrency(totalValue)}</Text>
                 </View>
-                <TouchableOpacity style={styles.confirmButton} onPress={handleCreateSlip}>
-                    <Text style={styles.confirmButtonText}>Tạo Phiếu</Text>
+                <TouchableOpacity 
+                    style={[styles.confirmButton, isCreating && styles.disabledButton]} 
+                    onPress={handleCreateSlip}
+                    disabled={isCreating}
+                >
+                    {isCreating ? (
+                        <ActivityIndicator color={COLORS.white} />
+                    ) : (
+                        <Text style={styles.confirmButtonText}>Tạo Phiếu</Text>
+                    )}
                 </TouchableOpacity>
             </View>
             {renderAddProductModal()}
@@ -192,7 +250,8 @@ const styles = StyleSheet.create({
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray, backgroundColor: `${COLORS.white}F0` },
     totalLabel: { ...FONTS.body4, color: COLORS.textMuted },
     totalValue: { ...FONTS.h2, color: COLORS.primary },
-    confirmButton: { backgroundColor: COLORS.success, paddingHorizontal: SIZES.padding * 2, paddingVertical: SIZES.padding, borderRadius: SIZES.radius },
+    confirmButton: { backgroundColor: COLORS.success, paddingHorizontal: SIZES.padding * 2, paddingVertical: SIZES.padding, borderRadius: SIZES.radius, minWidth: 120, alignItems: 'center' },
+    disabledButton: { backgroundColor: COLORS.textMuted },
     confirmButtonText: { ...FONTS.h3, color: COLORS.white },
     modalContainer: { flex: 1 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },

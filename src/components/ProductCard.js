@@ -1,79 +1,118 @@
-// src/components/ProductCard.js
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
+import { SERVER_BASE_URL } from '../api/apiService';
 
-// Hàm format tiền tệ
-const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+const formatCurrency = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) {
+        return '0 ₫';
+    }
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+};
 
-const ProductCard = ({ item, onAddToCart }) => (
-    <View style={styles.productCard}>
-        <Image source={{ uri: item.image }} style={styles.productImage} />
-        <View style={styles.productInfo}>
-            <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.productArtist} numberOfLines={1}>Họa sĩ: {item.artist}</Text>
-            <View style={styles.productFooter}>
-                <Text style={styles.productPrice}>{formatCurrency(item.sellingPrice)}</Text>
-                <TouchableOpacity onPress={() => onAddToCart(item)} style={styles.addButton}>
-                    <Ionicons name="add-circle" size={32} color={COLORS.primary} />
-                </TouchableOpacity>
+const ProductCard = ({ item, onAddToCart }) => {
+    const isSoldOut = item.status !== 'Đang bán';
+
+    return (
+        <View style={[styles.container, isSoldOut && styles.soldOutContainer]}>
+            <TouchableOpacity style={styles.imageContainer} disabled={isSoldOut}>
+                <Image
+                    source={item.image ? { uri: `${SERVER_BASE_URL}/api/files/${item.image}` } : require('../../assets/images/placeholder.png')}
+                    style={styles.image}
+                />
+                {isSoldOut && (
+                    <View style={styles.soldOutOverlay}>
+                        <Text style={styles.soldOutText}>ĐÃ BÁN</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+            <View style={styles.infoContainer}>
+                <Text style={[styles.productName, isSoldOut && styles.soldOutTextInfo]} numberOfLines={2}>{item.name}</Text>
+                <Text style={[styles.productPrice, isSoldOut && styles.soldOutTextInfo]}>{formatCurrency(item.sellingPrice)}</Text>
             </View>
+            <TouchableOpacity 
+                style={styles.addButton} 
+                onPress={() => onAddToCart(item)}
+                disabled={isSoldOut} 
+            >
+                <Ionicons name="add-circle" size={32} color={isSoldOut ? COLORS.lightGray : COLORS.primary} />
+            </TouchableOpacity>
         </View>
-    </View>
-);
+    );
+};
 
 const styles = StyleSheet.create({
-    productCard: {
-        flex: 1, // Để các card có chiều cao bằng nhau khi trong grid
+    container: {
+        flex: 1,
         margin: SIZES.base,
         backgroundColor: COLORS.white,
         borderRadius: SIZES.radius,
-        overflow: 'hidden',
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
             height: 1,
         },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOpacity: 0.20,
+        shadowRadius: 1.41,
         elevation: 2,
     },
-    productImage: {
+    soldOutContainer: {
+        backgroundColor: '#f8f9fa',
+    },
+    imageContainer: {
         width: '100%',
-        aspectRatio: 1, // Giữ ảnh là hình vuông
+        height: 150,
+        backgroundColor: COLORS.lightGray,
+        borderTopLeftRadius: SIZES.radius,
+        borderTopRightRadius: SIZES.radius,
+        overflow: 'hidden',
+    },
+    image: {
+        width: '100%',
+        height: '100%',
         resizeMode: 'cover',
     },
-    productInfo: {
+    soldOutOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    soldOutText: {
+        ...FONTS.h2,
+        color: COLORS.danger,
+        fontWeight: 'bold',
+        transform: [{ rotate: '-15deg' }],
+        borderWidth: 2,
+        borderColor: COLORS.danger,
+        paddingHorizontal: SIZES.padding,
+        paddingVertical: SIZES.base,
+        borderRadius: SIZES.radius,
+    },
+    infoContainer: {
         padding: SIZES.base,
+        height: 80,
     },
     productName: {
         ...FONTS.h4,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-    },
-    productArtist: {
-        ...FONTS.body4,
-        color: COLORS.textMuted,
-        fontSize: 12,
-        marginVertical: 2,
-    },
-    productFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: SIZES.base,
+        flexWrap: 'wrap',
     },
     productPrice: {
         ...FONTS.body3,
         color: COLORS.primary,
         fontWeight: 'bold',
-        flex: 1, // Cho phép giá chiếm không gian còn lại
+        marginTop: SIZES.base,
+    },
+    soldOutTextInfo: {
+        color: COLORS.textMuted,
     },
     addButton: {
-        // Có thể thêm style cho nút nếu cần
+        position: 'absolute',
+        bottom: 5,
+        right: 5,
     },
 });
 
-// Đừng quên export component
 export default ProductCard;

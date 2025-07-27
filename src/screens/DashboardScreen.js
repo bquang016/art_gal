@@ -1,21 +1,79 @@
-import React, { useState, useEffect } from 'react';
-// SỬA LỖI 1: Import thêm SafeAreaView
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { 
+    View, 
+    Text, 
+    StyleSheet, 
+    ScrollView, 
+    TouchableOpacity, 
+    SafeAreaView,
+    ActivityIndicator,
+    Alert
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LineChart, PieChart } from 'react-native-chart-kit';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { Ionicons } from '@expo/vector-icons';
 import KpiCard from '../components/KpiCard';
 
 const DashboardScreen = ({ navigation }) => {
     const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        api.getDashboardData().then(setData);
-    }, []);
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+      useCallback(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const response = await apiService.get('/dashboard');
+                const backendData = response.data;
+                
+                const safeSalesData = backendData.salesData?.data?.length > 0 ? backendData.salesData.data : [0];
 
+                const formattedData = {
+                    kpiData: backendData.kpiData,
+                    salesData: {
+                        week: {
+                            labels: backendData.salesData.labels,
+                            data: safeSalesData,
+                        }
+                    },
+                    proportionData: {
+                        category: {
+                            labels: backendData.proportionData.labels,
+                            data: backendData.proportionData.data,
+                        }
+                    }
+                };
+                setData(formattedData);
+            } catch (error) {
+                console.error("Failed to fetch dashboard data:", error.response?.data || error.message);
+                Alert.alert("Lỗi", "Không thể tải dữ liệu tổng quan. Vui lòng kiểm tra kết nối tới server.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+      }, [])
+    );
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+            </SafeAreaView>
+        );
+    }
+    
     if (!data) {
-        return <SafeAreaView style={styles.loadingContainer}><Text>Đang tải dữ liệu...</Text></SafeAreaView>;
+        return (
+             <SafeAreaView style={styles.loadingContainer}>
+                <Text>Không có dữ liệu.</Text>
+            </SafeAreaView>
+         );
     }
 
     const { kpiData, salesData, proportionData } = data;
@@ -29,7 +87,6 @@ const DashboardScreen = ({ navigation }) => {
     }));
 
     return (
-        // SỬA LỖI 2: Bọc toàn bộ màn hình bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
@@ -42,10 +99,10 @@ const DashboardScreen = ({ navigation }) => {
             </View>
             <ScrollView contentContainerStyle={styles.scrollView}>
                 <View style={styles.kpiContainer}>
-                    <KpiCard icon="cube-outline" title="Tổng Đơn hàng" value={kpiData.totalOrders.toLocaleString('vi-VN')} change={2.5} changeText="so với hôm qua" color={COLORS.primary} />
-                    <KpiCard icon="cash-outline" title="Tổng Doanh thu" value={kpiData.totalRevenue} change={5.1} changeText="so với hôm qua" color={COLORS.success} />
-                    <KpiCard icon="archive-outline" title="Tồn kho" value={kpiData.inventory} change={-10} changeText="sản phẩm" color={COLORS.textMuted}/>
-                    <KpiCard icon="trending-up-outline" title="Lợi nhuận" value={kpiData.profit} change={3.2} changeText="so với hôm qua" color={COLORS.warning}/>
+                    <KpiCard icon="cube-outline" title="Tổng Đơn hàng" value={kpiData.totalOrders.toLocaleString('vi-VN')} change={0} changeText="" color={COLORS.primary} />
+                    <KpiCard icon="cash-outline" title="Tổng Doanh thu" value={kpiData.totalRevenue} change={0} changeText="" color={COLORS.success} />
+                    <KpiCard icon="archive-outline" title="Tồn kho" value={kpiData.inventory} change={0} changeText="sản phẩm" color={COLORS.textMuted}/>
+                    <KpiCard icon="trending-up-outline" title="Lợi nhuận" value={kpiData.profit} change={0} changeText="" color={COLORS.warning}/>
                 </View>
 
                 {/* Biểu đồ doanh thu */}
@@ -56,7 +113,7 @@ const DashboardScreen = ({ navigation }) => {
                             labels: salesData.week.labels,
                             datasets: [{ data: salesData.week.data }]
                         }}
-                        width={SIZES.width - SIZES.padding * 2 - (SIZES.padding * 2) /* Adjust for padding */}
+                        width={SIZES.width - SIZES.padding * 2}
                         height={220}
                         yAxisSuffix="tr"
                         chartConfig={{
@@ -69,6 +126,7 @@ const DashboardScreen = ({ navigation }) => {
                             propsForDots: { r: "5", strokeWidth: "2", stroke: COLORS.primaryHover }
                         }}
                         style={{ borderRadius: SIZES.radius, marginLeft: -SIZES.base }}
+                        bezier
                     />
                 </View>
 
@@ -93,7 +151,6 @@ const DashboardScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI 3: Điều chỉnh Style
     container: { 
         flex: 1, 
         backgroundColor: COLORS.white 
@@ -101,14 +158,20 @@ const styles = StyleSheet.create({
     loadingContainer: { 
         flex: 1, 
         justifyContent: 'center', 
-        alignItems: 'center' 
+        alignItems: 'center',
+        backgroundColor: COLORS.background,
+    },
+    loadingText: {
+        marginTop: SIZES.base,
+        ...FONTS.body3,
+        color: COLORS.textMuted
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: SIZES.padding,
-        paddingVertical: SIZES.base, // Giảm padding dọc
+        paddingVertical: SIZES.base,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.lightGray,
         backgroundColor: COLORS.white,

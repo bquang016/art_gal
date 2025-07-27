@@ -1,32 +1,47 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity,
-    Modal, SafeAreaView, ScrollView, Button, Alert
+    Modal, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import ArtistListItem from '../components/ArtistListItem';
 
 const QuanLyHoaSiScreen = ({ navigation }) => {
     const [artists, setArtists] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-
-    // State cho Modal
     const [isModalVisible, setModalVisible] = useState(false);
-    const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
+    const [modalMode, setModalMode] = useState('add');
     const [editingArtist, setEditingArtist] = useState(null);
 
-    useEffect(() => {
-        api.getArtists().then(setArtists);
-    }, []);
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+      useCallback(() => {
+        const fetchArtists = async () => {
+            setLoading(true);
+            try {
+                const response = await apiService.get('/artists');
+                setArtists(response.data);
+            } catch (error) {
+                console.error("Failed to fetch artists:", error);
+                Alert.alert("Lỗi", "Không thể tải danh sách họa sĩ.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchArtists();
+      }, [])
+    );
 
     const filteredArtists = useMemo(() => {
         return artists.filter(artist =>
             (artist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-             artist.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-             artist.phone.includes(searchQuery)) &&
+             (artist.email && artist.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+             (artist.phone && artist.phone.includes(searchQuery))) &&
             (statusFilter === 'all' || artist.status === statusFilter)
         );
     }, [artists, searchQuery, statusFilter]);
@@ -42,7 +57,6 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
             phone: '',
             email: '',
             address: '',
-            joinDate: new Date().toISOString().split('T')[0],
             status: 'Đang hợp tác'
         });
         setModalVisible(true);
@@ -54,22 +68,31 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
         setModalVisible(true);
     };
 
-    const handleSaveArtist = () => {
+    const handleSaveArtist = async () => {
         if (!editingArtist || !editingArtist.name || !editingArtist.email) {
             Alert.alert("Lỗi", "Vui lòng điền đầy đủ Tên và Email của họa sĩ.");
             return;
         }
 
-        if (modalMode === 'add') {
-            const newArtist = { ...editingArtist, id: `HS${Date.now()}` };
-            setArtists(prev => [newArtist, ...prev]);
-            Alert.alert("Thành công", `Đã thêm họa sĩ mới: ${newArtist.name}`);
-        } else {
-            setArtists(prev => prev.map(artist => artist.id === editingArtist.id ? editingArtist : artist));
-            Alert.alert("Thành công", `Đã cập nhật thông tin cho họa sĩ: ${editingArtist.name}`);
+        try {
+            if (modalMode === 'add') {
+                await apiService.post('/artists', editingArtist);
+                Alert.alert("Thành công", `Đã thêm họa sĩ mới: ${editingArtist.name}`);
+            } else {
+                await apiService.put(`/artists/${editingArtist.id}`, editingArtist);
+                Alert.alert("Thành công", `Đã cập nhật thông tin cho họa sĩ: ${editingArtist.name}`);
+            }
+            setModalVisible(false);
+            setEditingArtist(null);
+            
+            // Tải lại danh sách sau khi lưu
+            const response = await apiService.get('/artists');
+            setArtists(response.data);
+
+        } catch (error) {
+            console.error("Failed to save artist:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Thao tác thất bại.");
         }
-        setModalVisible(false);
-        setEditingArtist(null);
     };
 
     const renderFormModal = () => (
@@ -122,7 +145,6 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
     );
 
     return (
-        // SỬA LỖI: Bọc bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
@@ -158,29 +180,32 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
                     <Text style={[styles.statusButtonText, statusFilter === 'Dừng hợp tác' && styles.statusButtonTextActive]}>Dừng hợp tác</Text>
                 </TouchableOpacity>
             </View>
+            
+            {loading ? (
+                <ActivityIndicator style={{ marginTop: SIZES.padding * 2 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    data={filteredArtists}
+                    renderItem={({ item }) => (
+                        <ArtistListItem
+                            item={item}
+                            onViewPaintings={handleViewPaintings}
+                            onEdit={handleOpenEditModal}
+                        />
+                    )}
+                    keyExtractor={item => item.id.toString()}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Không tìm thấy họa sĩ nào.</Text>}
+                />
+            )}
 
-            <FlatList
-                data={filteredArtists}
-                renderItem={({ item }) => (
-                    <ArtistListItem
-                        item={item}
-                        onViewPaintings={handleViewPaintings}
-                        onEdit={handleOpenEditModal}
-                    />
-                )}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={<Text style={styles.emptyText}>Không tìm thấy họa sĩ nào.</Text>}
-            />
             {renderFormModal()}
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI: container là SafeAreaView
     container: { flex: 1, backgroundColor: COLORS.white },
-    // SỬA LỖI: Bỏ padding top
     header: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
@@ -202,7 +227,7 @@ const styles = StyleSheet.create({
     listContainer: { 
         paddingHorizontal: SIZES.padding, 
         paddingTop: SIZES.padding,
-        backgroundColor: COLORS.background, // Thêm màu nền cho list
+        backgroundColor: COLORS.background,
     },
     emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
     statusFilterContainer: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
@@ -210,7 +235,6 @@ const styles = StyleSheet.create({
     statusButtonActive: { borderBottomWidth: 3, borderBottomColor: COLORS.primary },
     statusButtonText: { ...FONTS.h4, color: COLORS.textMuted },
     statusButtonTextActive: { color: COLORS.primary, fontWeight: 'bold' },
-    // Modal Styles
     modalContainer: { flex: 1 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
     modalTitle: { ...FONTS.h2 },

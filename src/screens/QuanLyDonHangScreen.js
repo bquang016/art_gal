@@ -1,27 +1,56 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput,
-    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert
+    TouchableOpacity, Modal, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import OrderItem from '../components/OrderItem';
 
-const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+const formatCurrency = (amount) => {
+    if (typeof amount !== 'number') {
+        return '0 ₫';
+    }
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+};
 
 const QuanLyDonHangScreen = ({ navigation }) => {
     const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
 
-    // State cho Modal chi tiết
     const [isModalVisible, setModalVisible] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
 
-    useEffect(() => {
-        api.getOrders().then(setOrders);
-    }, []);
+    // SỬA LẠI PHẦN NÀY
+    useFocusEffect(
+      useCallback(() => {
+        const fetchOrders = async () => {
+            setLoading(true);
+            try {
+                const response = await apiService.get('/orders');
+                const formattedOrders = response.data.map(order => ({
+                    ...order,
+                    // Ánh xạ lại các trường cho khớp với component OrderItem
+                    id: order.id.toString(),
+                    date: new Date(order.orderDate).toLocaleDateString('vi-VN'),
+                    customer: order.customerName,
+                    total: order.totalAmount
+                }));
+                setOrders(formattedOrders);
+            } catch (error) {
+                console.error("Failed to fetch orders:", error.response?.data || error.message);
+                Alert.alert("Lỗi", "Không thể tải danh sách đơn hàng.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchOrders();
+      }, [])
+    );
 
     const filteredOrders = useMemo(() => {
         return orders.filter(order =>
@@ -36,13 +65,28 @@ const QuanLyDonHangScreen = ({ navigation }) => {
         setModalVisible(true);
     };
 
-    const handleUpdateStatus = () => {
-        if (selectedOrder) {
-            setOrders(prevOrders => prevOrders.map(order => 
-                order.id === selectedOrder.id ? selectedOrder : order
-            ));
+    const handleUpdateStatus = async () => {
+        if (!selectedOrder || !selectedOrder.status) return;
+        
+        try {
+            await apiService.patch(`/orders/${selectedOrder.id}/status`, { status: selectedOrder.status });
             Alert.alert("Thành công", `Đã cập nhật trạng thái đơn hàng #${selectedOrder.id}`);
             setModalVisible(false);
+            
+            // Tải lại danh sách sau khi cập nhật
+            const response = await apiService.get('/orders');
+            const formattedOrders = response.data.map(order => ({
+                ...order,
+                id: order.id.toString(),
+                date: new Date(order.orderDate).toLocaleDateString('vi-VN'),
+                customer: order.customerName,
+                total: order.totalAmount
+            }));
+            setOrders(formattedOrders);
+
+        } catch (error) {
+            console.error("Failed to update order status:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Cập nhật trạng thái thất bại.");
         }
     };
     
@@ -65,18 +109,13 @@ const QuanLyDonHangScreen = ({ navigation }) => {
                     <ScrollView style={styles.modalContent}>
                         <View style={styles.detailSection}>
                             <Text style={styles.detailRow}>Khách hàng: {selectedOrder.customer}</Text>
-                            <Text style={styles.detailRow}>Người tạo: {selectedOrder.employee}</Text>
+                            <Text style={styles.detailRow}>Người tạo: {selectedOrder.userName}</Text>
                             <Text style={styles.detailRow}>Ngày tạo: {selectedOrder.date}</Text>
                         </View>
 
                         <View style={styles.detailSection}>
                             <Text style={styles.sectionTitle}>Sản phẩm</Text>
-                            {selectedOrder.products.map((p, index) => (
-                                <View key={index} style={styles.productRow}>
-                                    <Text style={styles.productName}>{p.name}</Text>
-                                    <Text style={styles.productPrice}>{formatCurrency(p.price)}</Text>
-                                </View>
-                            ))}
+                            {/* Chi tiết sản phẩm có thể được tải từ một API khác nếu cần */}
                             <View style={styles.totalRow}>
                                 <Text style={styles.totalText}>Tổng cộng</Text>
                                 <Text style={styles.totalAmount}>{formatCurrency(selectedOrder.total)}</Text>
@@ -113,7 +152,6 @@ const QuanLyDonHangScreen = ({ navigation }) => {
     );
 
     return (
-        // SỬA LỖI: Bọc bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
@@ -153,22 +191,24 @@ const QuanLyDonHangScreen = ({ navigation }) => {
                 </ScrollView>
             </View>
             
-            <FlatList
-                data={filteredOrders}
-                renderItem={({ item }) => <OrderItem item={item} onSelect={handleSelectOrder} />}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={<Text style={styles.emptyText}>Không có đơn hàng nào.</Text>}
-            />
+            {loading ? (
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    data={filteredOrders}
+                    renderItem={({ item }) => <OrderItem item={item} onSelect={handleSelectOrder} />}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Không có đơn hàng nào.</Text>}
+                />
+            )}
             {renderDetailModal()}
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI: container là SafeAreaView
     container: { flex: 1, backgroundColor: COLORS.white },
-    // SỬA LỖI: Bỏ padding top
     header: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
@@ -189,7 +229,7 @@ const styles = StyleSheet.create({
     searchInput: { flex: 1, ...FONTS.body3 },
     listContainer: { 
         padding: SIZES.padding,
-        backgroundColor: COLORS.background, // Thêm màu nền cho list
+        backgroundColor: COLORS.background,
     },
     emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
     statusFilterContainer: { 
@@ -217,7 +257,6 @@ const styles = StyleSheet.create({
     statusButtonTextActive: { 
         color: COLORS.white 
     },
-    // Modal Styles
     modalContainer: { flex: 1, backgroundColor: COLORS.white },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
     modalTitle: { ...FONTS.h2 },

@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 
 // Import Screens
+import AuthLoadingScreen from '../screens/AuthLoadingScreen';
 import DangNhapScreen from '../screens/DangNhapScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import BanHangScreen from '../screens/BanHangScreen';
@@ -16,22 +17,18 @@ import QuanLyKhachHangScreen from '../screens/QuanLyKhachHangScreen';
 import QuanLyTaiKhoanScreen from '../screens/QuanLyTaiKhoanScreen';
 import QuanLyThanhToanScreen from '../screens/QuanLyThanhToanScreen';
 import ThongTinCaNhanScreen from '../screens/ThongTinCaNhanScreen';
+import PaymentScreen from '../screens/PaymentScreen'; // Import màn hình thanh toán mới
 
-// Import Custom Drawer
 import DrawerContent from './DrawerContent';
-import { COLORS } from '../theme/theme';
 
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
 
-// Nhóm các màn hình sẽ được hiển thị trong menu
 const MainDrawerNavigator = () => {
     return (
         <Drawer.Navigator
-            // Sử dụng DrawerContent tùy chỉnh
             drawerContent={props => <DrawerContent {...props} />}
             screenOptions={{
-                // Ẩn header mặc định của Drawer để các màn hình trong Stack tự quản lý
                 headerShown: false, 
             }}
         >
@@ -49,25 +46,21 @@ const MainDrawerNavigator = () => {
     );
 }
 
-// Bộ điều hướng chính của ứng dụng
 const AppNavigator = () => {
     return (
         <Stack.Navigator
-            initialRouteName="DangNhap"
+            initialRouteName="AuthLoading" // Bắt đầu bằng màn hình chờ
             screenOptions={{
-                // Áp dụng chung cho tất cả các màn hình trong Stack
-                headerShown: false, // Ẩn header ở cấp cao nhất
+                headerShown: false,
             }}
         >
-            {/* Màn hình không cần menu (drawer) */}
+            {/* Các màn hình không nằm trong Drawer */}
+            <Stack.Screen name="AuthLoading" component={AuthLoadingScreen} />
             <Stack.Screen name="DangNhap" component={DangNhapScreen} />
-            
-            {/* Drawer Navigator được lồng vào như một màn hình của Stack */}
             <Stack.Screen name="Main" component={MainDrawerNavigator} />
-
-            {/* Các màn hình được điều hướng tới từ nơi khác, không nằm trong Drawer */}
             <Stack.Screen name="TaoPhieuNhap" component={TaoPhieuNhapScreen} />
             <Stack.Screen name="ThongTinCaNhan" component={ThongTinCaNhanScreen} />
+            <Stack.Screen name="Payment" component={PaymentScreen} />
         </Stack.Navigator>
     );
 };

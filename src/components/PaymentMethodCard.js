@@ -1,26 +1,34 @@
-// src/components/PaymentMethodCard.js
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 
-const PaymentMethodCard = ({ method, onConfigure }) => {
-    const [isEnabled, setIsEnabled] = useState(method.enabled);
-    const toggleSwitch = () => setIsEnabled(previousState => !previousState);
+const PaymentMethodCard = ({ method, onConfigure, onToggleSwitch }) => {
+    
+    // SỬA LẠI LOGIC LẤY LOGO Ở ĐÂY
+    const getLogo = (key) => {
+        if (key === 'qr_momo') return require('../../assets/images/momo-logo.png');
+        if (key === 'qr_zalopay') return require('../../assets/images/zalopay-logo.png');
+        return null;
+    };
+    const imageLogo = getLogo(method.methodKey);
+
+    const iconColor = method.methodKey === 'cash' ? COLORS.success : COLORS.primary;
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    {method.icon && <Ionicons name={method.icon} size={28} color={method.iconColor || COLORS.primary} />}
-                    {method.image && <Image source={method.image} style={styles.image} />}
+                    {method.methodKey === 'cash' && <Ionicons name="cash-outline" size={28} color={iconColor} />}
+                    {method.methodKey === 'qr_bank' && <Ionicons name="qr-code-outline" size={28} color={iconColor} />}
+                    {imageLogo && <Image source={imageLogo} style={styles.image} />}
                     <Text style={styles.title}>{method.name}</Text>
                 </View>
                 <Switch
                     trackColor={{ false: COLORS.lightGray, true: COLORS.primary }}
-                    thumbColor={isEnabled ? COLORS.white : COLORS.white}
-                    onValueChange={toggleSwitch}
-                    value={isEnabled}
+                    thumbColor={method.enabled ? COLORS.white : COLORS.white}
+                    onValueChange={(newValue) => onToggleSwitch(method, newValue)}
+                    value={method.enabled}
                 />
             </View>
             <Text style={styles.description}>{method.description}</Text>
@@ -41,6 +49,11 @@ const styles = StyleSheet.create({
         borderRadius: SIZES.radius,
         padding: SIZES.padding,
         marginBottom: SIZES.itemSpacing,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     header: {
         flexDirection: 'row',
@@ -60,7 +73,6 @@ const styles = StyleSheet.create({
     },
     title: {
         ...FONTS.h3,
-        marginLeft: SIZES.base,
     },
     description: {
         ...FONTS.body3,

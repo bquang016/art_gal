@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
-// SỬA LỖI 1: Import thêm Keyboard và TouchableWithoutFeedback
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Modal, SafeAreaView, ScrollView, Alert, TextInput, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { 
+    View, Text, FlatList, StyleSheet, TouchableOpacity, Modal, 
+    SafeAreaView, ScrollView, Alert, ActivityIndicator, TextInput
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import ProductCard from '../components/ProductCard';
 
@@ -17,19 +20,49 @@ const TAX_RATE = 0.08;
 
 const BanHangScreen = ({ navigation }) => {
     const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState(''); // Thêm state cho tìm kiếm
     const [cart, setCart] = useState([]);
     const [isCartVisible, setCartVisible] = useState(false);
-    
-    const [isPaymentModalVisible, setPaymentModalVisible] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState('cash');
-    const [cashReceived, setCashReceived] = useState('');
 
-    useEffect(() => {
-        api.getPaintings().then(p => setProducts(p.filter(item => item.status === 'Đang bán')));
-    }, []);
+    useFocusEffect(
+      useCallback(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const productsRes = await apiService.get('/paintings');
+                setProducts(productsRes.data);
+                setCart([]);
+            } catch (error) {
+                console.error("Failed to fetch products:", error.response?.data || error.message);
+                Alert.alert("Lỗi", "Không thể tải danh sách sản phẩm.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+      }, [])
+    );
+
+    // Thêm logic để lọc sản phẩm dựa trên searchQuery
+    const filteredProducts = useMemo(() => {
+        if (!searchQuery) {
+            return products;
+        }
+        return products.filter(p => 
+            p.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [products, searchQuery]);
 
     const handleAddToCart = (product) => {
-        if (cart.some(item => item.id === product.id)) return;
+        if (product.status !== 'Đang bán') {
+            Alert.alert("Hết hàng", "Sản phẩm này đã được bán. Vui lòng chọn sản phẩm khác.");
+            return;
+        }
+        if (cart.some(item => item.id === product.id)) {
+             Alert.alert("Thông báo", "Sản phẩm đã có trong giỏ hàng.");
+            return;
+        };
         setCart(prevCart => [...prevCart, { ...product, quantity: 1 }]);
     };
     
@@ -40,77 +73,18 @@ const BanHangScreen = ({ navigation }) => {
     const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.sellingPrice, 0), [cart]);
     const tax = subtotal * TAX_RATE;
     const total = subtotal + tax;
-    const change = parseFloat(cashReceived) - total;
-
-    const handleOpenPaymentModal = () => {
+    
+    const handleGoToPayment = () => {
         if (cart.length === 0) {
             Alert.alert("Lỗi", "Giỏ hàng đang trống!");
             return;
         }
         setCartVisible(false);
-        setPaymentMethod('cash');
-        setCashReceived('');
-        setPaymentModalVisible(true);
+        navigation.navigate('Payment', {
+            cart: cart,
+            total: total,
+        });
     };
-    
-    const handleConfirmPayment = () => {
-        Alert.alert("Thành công", "Đã thanh toán và tạo hóa đơn thành công!");
-        setPaymentModalVisible(false);
-        setCart([]);
-    };
-    
-    const renderPaymentModal = () => (
-        <Modal visible={isPaymentModalVisible} transparent={true} animationType="fade">
-            {/* SỬA LỖI 2: Bọc toàn bộ View bằng TouchableWithoutFeedback */}
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                <View style={styles.centeredView}>
-                    <View style={styles.paymentModalView}>
-                        <Text style={styles.paymentModalTitle}>Xác nhận thanh toán</Text>
-                        <Text style={styles.paymentTotalLabel}>Tổng tiền cần thanh toán</Text>
-                        <Text style={styles.paymentTotalAmount}>{formatCurrency(total)}</Text>
-
-                        <Text style={styles.paymentMethodLabel}>Chọn phương thức</Text>
-                        <View style={styles.paymentMethodContainer}>
-                            <TouchableOpacity onPress={() => setPaymentMethod('cash')} style={[styles.paymentMethodButton, paymentMethod === 'cash' && styles.paymentMethodActive]}>
-                                <Ionicons name="cash-outline" size={24} color={paymentMethod === 'cash' ? COLORS.primary : COLORS.textMuted} />
-                                <Text style={[styles.paymentMethodText, paymentMethod === 'cash' && {color: COLORS.primary}]}>Tiền mặt</Text>
-                            </TouchableOpacity>
-                             <TouchableOpacity onPress={() => setPaymentMethod('qr')} style={[styles.paymentMethodButton, paymentMethod === 'qr' && styles.paymentMethodActive]}>
-                                <Ionicons name="qr-code-outline" size={24} color={paymentMethod === 'qr' ? COLORS.primary : COLORS.textMuted} />
-                                 <Text style={[styles.paymentMethodText, paymentMethod === 'qr' && {color: COLORS.primary}]}>QR Code</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {paymentMethod === 'cash' && (
-                            <View style={{width: '100%'}}>
-                                <Text style={styles.inputLabel}>Tiền khách đưa</Text>
-                                <TextInput 
-                                    style={styles.input} 
-                                    placeholder="0"
-                                    keyboardType="numeric"
-                                    value={cashReceived}
-                                    onChangeText={setCashReceived}
-                                />
-                                <View style={styles.summaryRow}>
-                                    <Text>Tiền thừa trả khách:</Text>
-                                    <Text style={styles.changeText}>{change >= 0 ? formatCurrency(change) : '0 ₫'}</Text>
-                                </View>
-                            </View>
-                        )}
-
-                        <View style={styles.modalButtonContainer}>
-                             <TouchableOpacity style={styles.closeButton} onPress={() => setPaymentModalVisible(false)}>
-                                <Text style={styles.closeButtonText}>Đóng</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.confirmPaymentButton} onPress={handleConfirmPayment}>
-                                <Text style={styles.confirmPaymentButtonText}>Xác nhận</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </TouchableWithoutFeedback>
-        </Modal>
-    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -121,14 +95,33 @@ const BanHangScreen = ({ navigation }) => {
                 <Text style={styles.headerTitle}>Bán hàng</Text>
                 <View style={{width: 44}} />
             </View>
+            
+            {/* THÊM THANH TÌM KIẾM VÀO ĐÂY */}
+            <View style={styles.searchContainer}>
+                <View style={styles.searchWrapper}>
+                    <Ionicons name="search" size={20} color={COLORS.textMuted} style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Tìm kiếm tranh..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor={COLORS.textMuted}
+                    />
+                </View>
+            </View>
 
-            <FlatList
-                data={products}
-                renderItem={({ item }) => <ProductCard item={item} onAddToCart={handleAddToCart} />}
-                keyExtractor={item => item.id}
-                numColumns={2}
-                contentContainerStyle={styles.listContainer}
-            />
+            {loading ? (
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    data={filteredProducts} // Sử dụng danh sách đã được lọc
+                    renderItem={({ item }) => <ProductCard item={item} onAddToCart={handleAddToCart} />}
+                    keyExtractor={item => item.id.toString()}
+                    numColumns={2}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Không có sản phẩm nào.</Text>}
+                />
+            )}
 
             {cart.length > 0 && (
                 <TouchableOpacity style={styles.cartFab} onPress={() => setCartVisible(true)}>
@@ -137,41 +130,44 @@ const BanHangScreen = ({ navigation }) => {
                 </TouchableOpacity>
             )}
 
-            <Modal visible={isCartVisible} onRequestClose={() => setCartVisible(false)}>
+            <Modal visible={isCartVisible} onRequestClose={() => setCartVisible(false)} transparent={true} animationType="slide">
                 <SafeAreaView style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Đơn hàng của bạn</Text>
-                        <TouchableOpacity onPress={() => setCartVisible(false)}>
-                            <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView contentContainerStyle={styles.cartItemsContainer}>
-                        {cart.map(item => (
-                            <View key={item.id} style={styles.cartItem}>
-                                <View style={{ flex: 1, marginRight: SIZES.base }}>
-                                    <Text style={styles.cartItemName}>{item.name}</Text>
-                                    <Text style={styles.cartItemPrice}>{formatCurrency(item.sellingPrice)}</Text>
+                    <TouchableOpacity style={{flex: 1}} onPress={() => setCartVisible(false)} />
+                    <View style={styles.cartView}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Đơn hàng của bạn ({cart.length})</Text>
+                            <TouchableOpacity onPress={() => setCartVisible(false)}>
+                                <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={cart}
+                            keyExtractor={item => item.id.toString()}
+                            renderItem={({item}) => (
+                                <View style={styles.cartItem}>
+                                    <View style={{ flex: 1, marginRight: SIZES.base }}>
+                                        <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
+                                        <Text style={styles.cartItemPrice}>{formatCurrency(item.sellingPrice)}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => handleRemoveFromCart(item.id)}>
+                                        <Ionicons name="trash-outline" size={24} color={COLORS.danger} />
+                                    </TouchableOpacity>
                                 </View>
-                                <TouchableOpacity onPress={() => handleRemoveFromCart(item.id)}>
-                                    <Ionicons name="trash-outline" size={24} color={COLORS.danger} />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                    </ScrollView>
-
-                    <View style={styles.summaryContainer}>
-                        <View style={styles.summaryRow}><Text>Tạm tính</Text><Text>{formatCurrency(subtotal)}</Text></View>
-                        <View style={styles.summaryRow}><Text>Thuế (8%)</Text><Text>{formatCurrency(tax)}</Text></View>
-                        <View style={styles.totalRow}><Text style={styles.totalText}>Tổng cộng</Text><Text style={styles.totalText}>{formatCurrency(total)}</Text></View>
-                        <TouchableOpacity style={styles.paymentButton} onPress={handleOpenPaymentModal}>
-                            <Text style={styles.paymentButtonText}>THANH TOÁN</Text>
-                        </TouchableOpacity>
+                            )}
+                            ListEmptyComponent={<Text style={styles.emptyText}>Giỏ hàng trống</Text>}
+                            style={styles.cartItemsContainer}
+                        />
+                        <View style={styles.summaryContainer}>
+                            <View style={styles.summaryRow}><Text>Tạm tính</Text><Text>{formatCurrency(subtotal)}</Text></View>
+                            <View style={styles.summaryRow}><Text>Thuế (8%)</Text><Text>{formatCurrency(tax)}</Text></View>
+                            <View style={styles.totalRow}><Text style={styles.totalText}>Tổng cộng</Text><Text style={styles.totalText}>{formatCurrency(total)}</Text></View>
+                            <TouchableOpacity style={styles.paymentButton} onPress={handleGoToPayment}>
+                                <Text style={styles.paymentButtonText}>THANH TOÁN</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </SafeAreaView>
             </Modal>
-            
-            {renderPaymentModal()}
         </SafeAreaView>
     );
 };
@@ -181,14 +177,42 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SIZES.padding, paddingVertical: SIZES.base, backgroundColor: COLORS.white },
     headerButton: { padding: SIZES.base },
     headerTitle: { ...FONTS.h2, color: COLORS.textDark },
+    searchContainer: { 
+        paddingHorizontal: SIZES.padding, 
+        paddingVertical: SIZES.base,
+        backgroundColor: COLORS.white,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.lightGray,
+    },
+    searchWrapper: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: COLORS.background, 
+        borderRadius: SIZES.radius, 
+        height: 48 
+    },
+    searchIcon: { 
+        marginHorizontal: SIZES.base * 1.5 
+    },
+    searchInput: { 
+        flex: 1, 
+        ...FONTS.body3 
+    },
     listContainer: { padding: SIZES.base },
+    emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
     cartFab: { position: 'absolute', bottom: 30, right: 20, backgroundColor: COLORS.primary, width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 8 },
     cartFabText: { position: 'absolute', top: 5, right: 5, backgroundColor: COLORS.danger, color: COLORS.white, borderRadius: 10, paddingHorizontal: 5, fontSize: 12, fontWeight: 'bold' },
-    modalContainer: { flex: 1 },
+    modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    cartView: {
+        maxHeight: '80%',
+        backgroundColor: COLORS.white,
+        borderTopLeftRadius: SIZES.radius * 2,
+        borderTopRightRadius: SIZES.radius * 2,
+    },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding },
-    modalTitle: { ...FONTS.h1 },
-    cartItemsContainer: { paddingHorizontal: SIZES.padding },
-    cartItem: { flexDirection: 'row', paddingVertical: SIZES.padding, borderBottomWidth: 1, borderColor: COLORS.lightGray },
+    modalTitle: { ...FONTS.h2 },
+    cartItemsContainer: { paddingHorizontal: SIZES.padding, maxHeight: 300 },
+    cartItem: { flexDirection: 'row', paddingVertical: SIZES.padding, borderBottomWidth: 1, borderColor: COLORS.lightGray, alignItems: 'center' },
     cartItemName: { ...FONTS.h4 },
     cartItemPrice: { ...FONTS.body3, color: COLORS.textMuted },
     summaryContainer: { padding: SIZES.padding, borderTopWidth: 1, borderColor: COLORS.lightGray, backgroundColor: COLORS.white },
@@ -197,24 +221,6 @@ const styles = StyleSheet.create({
     totalText: { ...FONTS.h3 },
     paymentButton: { backgroundColor: COLORS.primary, padding: SIZES.padding, borderRadius: SIZES.radius, alignItems: 'center', marginTop: SIZES.padding },
     paymentButtonText: { color: COLORS.white, ...FONTS.h3 },
-    centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-    paymentModalView: { width: '90%', backgroundColor: 'white', borderRadius: SIZES.radius * 2, padding: SIZES.padding, alignItems: 'center' },
-    paymentModalTitle: { ...FONTS.h2, marginBottom: SIZES.base },
-    paymentTotalLabel: { ...FONTS.body3, color: COLORS.textMuted },
-    paymentTotalAmount: { ...FONTS.largeTitle, color: COLORS.primary, marginVertical: SIZES.padding },
-    paymentMethodLabel: { ...FONTS.h4, color: COLORS.textMuted, alignSelf: 'flex-start', marginVertical: SIZES.base },
-    paymentMethodContainer: { flexDirection: 'row', width: '100%', marginBottom: SIZES.padding },
-    paymentMethodButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: SIZES.padding, borderWidth: 1, borderColor: COLORS.border, borderRadius: SIZES.radius, marginHorizontal: SIZES.base / 2 },
-    paymentMethodActive: { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}15` },
-    paymentMethodText: { marginLeft: SIZES.base, ...FONTS.h4 },
-    inputLabel: { ...FONTS.h4, color: COLORS.textMuted, alignSelf: 'flex-start' },
-    input: { height: 50, width: '100%', backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.h3, marginTop: SIZES.base, marginBottom: SIZES.base, textAlign: 'right' },
-    changeText: { ...FONTS.h3, fontWeight: 'bold' },
-    modalButtonContainer: { flexDirection: 'row', width: '100%', marginTop: SIZES.padding * 2 },
-    closeButton: { flex: 1, padding: SIZES.padding, borderRadius: SIZES.radius, alignItems: 'center', backgroundColor: COLORS.lightGray, marginRight: SIZES.base },
-    closeButtonText: { ...FONTS.h4, color: COLORS.textDark },
-    confirmPaymentButton: { flex: 2, padding: SIZES.padding, borderRadius: SIZES.radius, alignItems: 'center', backgroundColor: COLORS.success, marginLeft: SIZES.base },
-    confirmPaymentButtonText: { ...FONTS.h4, color: COLORS.white },
 });
 
 export default BanHangScreen;

@@ -1,23 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet,
-    TouchableOpacity, Modal, SafeAreaView, ScrollView
+    TouchableOpacity, Modal, SafeAreaView, ScrollView, Alert, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/mockApi';
+import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import ImportSlipListItem from '../components/ImportSlipListItem';
 
-const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
 
 const QuanLyNhapHangScreen = ({ navigation }) => {
     const [importSlips, setImportSlips] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [isModalVisible, setModalVisible] = useState(false);
     const [selectedSlip, setSelectedSlip] = useState(null);
 
-    useEffect(() => {
-        api.getImportSlips().then(setImportSlips);
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            const fetchImportSlips = async () => {
+                setLoading(true);
+                try {
+                    const response = await apiService.get('/import-slips');
+                    // Ánh xạ lại dữ liệu để khớp với component
+                    const formattedData = response.data.map(slip => ({
+                        ...slip,
+                        id: slip.id.toString(),
+                        date: slip.importDate,
+                        status: 'Đã hoàn tất', // Tạm mock status
+                    }));
+                    setImportSlips(formattedData);
+                } catch (error) {
+                    console.error("Failed to fetch import slips:", error.response?.data || error.message);
+                    Alert.alert("Lỗi", "Không thể tải danh sách phiếu nhập.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchImportSlips();
+        }, [])
+    );
 
     const handleViewDetails = (slip) => {
         setSelectedSlip(slip);
@@ -37,13 +60,14 @@ const QuanLyNhapHangScreen = ({ navigation }) => {
                     <ScrollView style={styles.modalContent}>
                         <Text style={styles.slipIdText}>Mã phiếu: #{selectedSlip.id}</Text>
                         <Text style={styles.detailText}>Nhà cung cấp: {selectedSlip.artistName}</Text>
-                        <Text style={styles.detailText}>Người tạo: {selectedSlip.employeeName}</Text>
+                        <Text style={styles.detailText}>Người tạo: {selectedSlip.userName}</Text>
                         <Text style={styles.detailText}>Ngày nhập: {new Date(selectedSlip.date).toLocaleDateString('vi-VN')}</Text>
 
                         <Text style={styles.sectionTitle}>Sản phẩm đã nhập</Text>
-                        {selectedSlip.products.map((p, index) => (
-                            <View key={index} style={styles.productRow}>
-                                <Text style={styles.productName}>{p.name}</Text>
+                        {/* SỬA LẠI CHỖ NÀY: Dùng 'importSlipDetails' thay vì 'products' */}
+                        {selectedSlip.importSlipDetails && selectedSlip.importSlipDetails.map((p, index) => (
+                            <View key={p.paintingId || index} style={styles.productRow}>
+                                <Text style={styles.productName}>{p.paintingName}</Text>
                                 <Text style={styles.productPrice}>{formatCurrency(p.price)}</Text>
                             </View>
                         ))}
@@ -58,7 +82,6 @@ const QuanLyNhapHangScreen = ({ navigation }) => {
     );
 
     return (
-        // SỬA LỖI: Bọc toàn bộ bằng SafeAreaView
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.headerButton}>
@@ -69,22 +92,24 @@ const QuanLyNhapHangScreen = ({ navigation }) => {
                     <Ionicons name="add" size={32} color={COLORS.primary} />
                 </TouchableOpacity>
             </View>
-            <FlatList
-                data={importSlips}
-                renderItem={({ item }) => <ImportSlipListItem item={item} onViewDetails={handleViewDetails} />}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={<Text style={styles.emptyText}>Chưa có phiếu nhập nào.</Text>}
-            />
+            {loading ? (
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    data={importSlips}
+                    renderItem={({ item }) => <ImportSlipListItem item={item} onViewDetails={handleViewDetails} />}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Chưa có phiếu nhập nào.</Text>}
+                />
+            )}
             {renderDetailModal()}
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    // SỬA LỖI: container giờ là SafeAreaView
     container: { flex: 1, backgroundColor: COLORS.white },
-    // SỬA LỖI: Bỏ padding top, SafeAreaView đã xử lý
     header: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
@@ -99,10 +124,9 @@ const styles = StyleSheet.create({
     headerTitle: { ...FONTS.h2 },
     listContainer: { 
         padding: SIZES.padding,
-        backgroundColor: COLORS.background, // Thêm màu nền cho phần list
+        backgroundColor: COLORS.background,
     },
     emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
-    // Modal Styles
     modalContainer: { flex: 1 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
     modalTitle: { ...FONTS.h2 },

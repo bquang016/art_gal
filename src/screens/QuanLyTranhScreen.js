@@ -1,25 +1,51 @@
-// src/screens/QuanLyTranhScreen.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity,
-    Modal, SafeAreaView, ScrollView, Button, Alert
+    Modal, SafeAreaView, ScrollView, Button, Alert, ActivityIndicator, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { api } from '../api/mockApi';
+import * as ImagePicker from 'expo-image-picker';
+import apiService, { SERVER_BASE_URL } from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import PaintingListItem from '../components/PaintingListItem';
 import PaintingGridItem from '../components/PaintingGridItem';
-import CustomPicker from '../components/CustomPicker'; // Import component mới
+import CustomPicker from '../components/CustomPicker';
 
 const QuanLyTranhScreen = ({ route, navigation }) => {
     const [paintings, setPaintings] = useState([]);
+    const [artists, setArtists] = useState([]);
     const [categories, setCategories] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('grid');
-
     const [isModalVisible, setModalVisible] = useState(false);
     const [editingPainting, setEditingPainting] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            const fetchData = async () => {
+                setLoading(true);
+                try {
+                    const [paintingsRes, artistsRes, categoriesRes] = await Promise.all([
+                        apiService.get('/paintings'),
+                        apiService.get('/artists'),
+                        apiService.get('/categories')
+                    ]);
+                    setPaintings(paintingsRes.data);
+                    setArtists(artistsRes.data);
+                    setCategories(categoriesRes.data);
+                } catch (error) {
+                    console.error("Failed to fetch data:", error);
+                    Alert.alert("Lỗi", "Không thể tải dữ liệu.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchData();
+        }, [])
+    );
 
     useFocusEffect(
         React.useCallback(() => {
@@ -28,40 +54,85 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                 setSearchQuery(artistFilterFromNav);
                 navigation.setParams({ artistFilter: undefined });
             }
-        }, [route.params?.artistFilter])
+        }, [route.params?.artistFilter, navigation])
     );
 
-    useEffect(() => {
-        api.getPaintings().then(setPaintings);
-        api.getCategories().then(setCategories);
-    }, []);
+    const paintingsWithArtistNames = useMemo(() => {
+        return paintings.map(p => {
+            const artist = artists.find(a => a.id === p.artistId);
+            return { ...p, artistName: artist ? artist.name : 'Không rõ' };
+        });
+    }, [paintings, artists]);
 
     const filteredPaintings = useMemo(() => {
-        return paintings.filter(p =>
+        return paintingsWithArtistNames.filter(p =>
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.artist.toLowerCase().includes(searchQuery.toLowerCase())
+            (p.artistName && p.artistName.toLowerCase().includes(searchQuery.toLowerCase()))
         );
-    }, [paintings, searchQuery]);
+    }, [paintingsWithArtistNames, searchQuery]);
 
     const handleOpenEditModal = (item) => {
-        setEditingPainting({ ...item });
+        const originalPainting = paintings.find(p => p.id === item.id);
+        setEditingPainting({ ...originalPainting });
         setModalVisible(true);
     };
 
-    const handleSavePainting = () => {
-        if (!editingPainting.name || !editingPainting.artist || !editingPainting.sellingPrice) {
+    const handleUploadImage = async () => {
+        let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+            Alert.alert("Lỗi", "Bạn cần cấp quyền truy cập thư viện ảnh.");
+            return;
+        }
+        let pickerResult = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaType.Images,
+            allowsEditing: true,
+            quality: 0.8,
+        });
+        if (pickerResult.canceled) return;
+        
+        const uri = pickerResult.assets[0].uri;
+        const filename = uri.split('/').pop();
+        const type = `image/${filename.split('.').pop()}`;
+
+        const formData = new FormData();
+        formData.append('file', { uri, name: filename, type });
+
+        setIsUploading(true);
+        try {
+            const response = await apiService.post('/files/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                transformRequest: (data) => data,
+            });
+            const uploadedFilename = response.data;
+            setEditingPainting({...editingPainting, image: uploadedFilename});
+            Alert.alert("Thành công", "Tải ảnh lên thành công! Nhấn 'Lưu' để xác nhận.");
+        } catch (error) {
+            Alert.alert("Lỗi", "Tải ảnh lên thất bại.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleSavePainting = async () => {
+        if (!editingPainting || !editingPainting.name || !editingPainting.sellingPrice || !editingPainting.artistId || !editingPainting.categoryId) {
             Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường bắt buộc.");
             return;
         }
-
-        setPaintings(prev => prev.map(p => p.id === editingPainting.id ? editingPainting : p));
-        Alert.alert("Thành công", `Đã cập nhật tranh "${editingPainting.name}".`);
-        setModalVisible(false);
-        setEditingPainting(null);
+        try {
+            const payload = { ...editingPainting };
+            await apiService.put(`/paintings/${editingPainting.id}`, payload);
+            Alert.alert("Thành công", `Đã cập nhật tranh "${editingPainting.name}".`);
+            setModalVisible(false);
+            setEditingPainting(null);
+            fetchData();
+        } catch (error) {
+            console.error("Failed to save painting:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Cập nhật thất bại.");
+        }
     };
     
-    // Chuẩn bị dữ liệu cho CustomPicker
-    const categoryData = categories.map(c => ({ label: c, value: c }));
+    const categoryDataForPicker = categories.map(c => ({ label: c.name, value: c.id }));
+    const artistDataForPicker = artists.map(a => ({ label: a.name, value: a.id }));
 
     const renderFormModal = () => (
         <Modal
@@ -79,30 +150,38 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                 <ScrollView style={styles.modalContent}>
                     {editingPainting && (
                         <>
+                            <TouchableOpacity style={styles.uploadButton} onPress={handleUploadImage} disabled={isUploading}>
+                                {isUploading ? <ActivityIndicator color={COLORS.primary}/> :
+                                    (editingPainting.image ? 
+                                        <Image source={{ uri: `${SERVER_BASE_URL}/api/files/${editingPainting.image}` }} style={styles.previewImage} />
+                                        : <Ionicons name="image-outline" size={48} color={COLORS.textMuted} />
+                                    )
+                                }
+                            </TouchableOpacity>
+                            <Text style={styles.hintText}>Nhấn vào ảnh để thay đổi</Text>
+                            
                             <Text style={styles.inputLabel}>Tên tranh *</Text>
                             <TextInput style={styles.input} value={editingPainting.name} onChangeText={text => setEditingPainting({ ...editingPainting, name: text })} />
-
-                            <Text style={styles.inputLabel}>Họa sĩ *</Text>
-                            <TextInput style={styles.input} value={editingPainting.artist} onChangeText={text => setEditingPainting({ ...editingPainting, artist: text })} />
-                            
-                             {/* Sử dụng CustomPicker cho Thể loại */}
                             <CustomPicker
+                                label="Họa sĩ *"
+                                data={artistDataForPicker}
+                                selectedValue={editingPainting.artistId}
+                                onValueChange={val => setEditingPainting({ ...editingPainting, artistId: val })}
+                                placeholder="Chọn họa sĩ"
+                            />
+                             <CustomPicker
                                 label="Thể loại *"
-                                data={categoryData}
-                                selectedValue={editingPainting.category}
-                                onValueChange={val => setEditingPainting({ ...editingPainting, category: val })}
+                                data={categoryDataForPicker}
+                                selectedValue={editingPainting.categoryId}
+                                onValueChange={val => setEditingPainting({ ...editingPainting, categoryId: val })}
                                 placeholder="Chọn thể loại"
                             />
-
                             <Text style={styles.inputLabel}>Chất liệu *</Text>
                             <TextInput style={styles.input} value={editingPainting.material} onChangeText={text => setEditingPainting({ ...editingPainting, material: text })} />
-
                             <Text style={styles.inputLabel}>Giá bán (VND) *</Text>
                             <TextInput style={styles.input} value={String(editingPainting.sellingPrice)} onChangeText={text => setEditingPainting({ ...editingPainting, sellingPrice: text })} keyboardType="numeric" />
-
                             <Text style={styles.inputLabel}>Giá nhập (VND)</Text>
                             <TextInput style={[styles.input, styles.inputDisabled]} value={String(editingPainting.importPrice)} editable={false} />
-
                             <Text style={styles.inputLabel}>Trạng thái</Text>
                             <View style={styles.statusSelectContainer}>
                                 <TouchableOpacity onPress={() => setEditingPainting({ ...editingPainting, status: 'Đang bán' })} style={[styles.statusSelectButton, editingPainting.status === 'Đang bán' && styles.statusSelectButtonActive]}>
@@ -131,7 +210,6 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                 <Text style={styles.headerTitle}>Quản lý Tranh</Text>
                 <View style={{ width: 44 }} />
             </View>
-
             <View style={styles.searchFilterContainer}>
                 <View style={styles.searchWrapper}>
                     <Ionicons name="search" size={20} color={COLORS.textMuted} style={styles.searchIcon} />
@@ -147,21 +225,23 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                     <Ionicons name={viewMode === 'grid' ? 'list' : 'grid'} size={24} color={COLORS.textDark} />
                 </TouchableOpacity>
             </View>
-
-            <FlatList
-                key={viewMode}
-                data={filteredPaintings}
-                renderItem={({ item }) =>
-                    viewMode === 'grid'
-                        ? <PaintingGridItem item={item} onEdit={handleOpenEditModal} onHistory={() => alert('Xem lịch sử')} />
-                        : <PaintingListItem item={item} onEdit={handleOpenEditModal} onHistory={() => alert('Xem lịch sử')} />
-                }
-                keyExtractor={item => item.id}
-                numColumns={viewMode === 'grid' ? 2 : 1}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={<Text style={styles.emptyText}>Không tìm thấy tranh nào.</Text>}
-            />
-
+            {loading ? (
+                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+            ) : (
+                <FlatList
+                    key={viewMode}
+                    data={filteredPaintings}
+                    renderItem={({ item }) =>
+                        viewMode === 'grid'
+                            ? <PaintingGridItem item={{...item, artist: item.artistName}} onEdit={handleOpenEditModal} onHistory={() => alert('Xem lịch sử')} />
+                            : <PaintingListItem item={{...item, artist: item.artistName}} onEdit={handleOpenEditModal} onHistory={() => alert('Xem lịch sử')} />
+                    }
+                    keyExtractor={item => item.id.toString()}
+                    numColumns={viewMode === 'grid' ? 2 : 1}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={<Text style={styles.emptyText}>Không tìm thấy tranh nào.</Text>}
+                />
+            )}
             {renderFormModal()}
         </SafeAreaView>
     );
@@ -202,6 +282,28 @@ const styles = StyleSheet.create({
     statusSelectButtonActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
     statusSelectText: { ...FONTS.body3, fontWeight: '600', color: COLORS.textDark },
     statusSelectTextActive: { color: COLORS.white },
+    uploadButton: {
+        height: 200,
+        backgroundColor: COLORS.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: SIZES.radius,
+        marginBottom: SIZES.base,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    previewImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: SIZES.radius,
+        resizeMode: 'contain',
+    },
+    hintText: {
+        ...FONTS.body4,
+        color: COLORS.textMuted,
+        textAlign: 'center',
+        marginBottom: SIZES.padding,
+    },
 });
 
 export default QuanLyTranhScreen;

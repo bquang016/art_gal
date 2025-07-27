@@ -1,41 +1,42 @@
 // src/screens/DangNhapScreen.js
 import React, { useState } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    StyleSheet,
-    Alert,
-    SafeAreaView,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    TouchableWithoutFeedback,
-    Keyboard
+    View, Text, TextInput, TouchableOpacity, StyleSheet,
+    Alert, SafeAreaView, Image, KeyboardAvoidingView,
+    Platform, TouchableWithoutFeedback, Keyboard
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiService from '../api/apiService';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
-import { api } from '../api/mockApi';
 
 const DangNhapScreen = ({ navigation }) => {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
+    const [username, setUsername] = useState('admin');
+    const [password, setPassword] = useState('admin123');
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
         if (!username || !password) {
-            Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
+            Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin.');
             return;
         }
-        api.login(username, password)
-            .then(response => {
-                // Hiển thị thông báo thành công và chuyển hướng
-                navigation.replace('Main');
-            })
-            .catch(error => {
-                Alert.alert('Đăng nhập thất bại', 'Tên đăng nhập hoặc mật khẩu không chính xác.');
+        try {
+            const response = await apiService.post('/auth/login', {
+                usernameOrEmail: username,
+                password: password,
             });
+
+            const { accessToken } = response.data;
+            if (accessToken) {
+                await AsyncStorage.setItem('jwt_token', accessToken);
+                navigation.replace('Main');
+            } else {
+                throw new Error("Token không hợp lệ");
+            }
+        } catch (error) {
+            console.error("Login Error:", error.response?.data || error.message);
+            Alert.alert('Đăng nhập thất bại', 'Tên đăng nhập hoặc mật khẩu không chính xác.');
+        }
     };
 
     return (
