@@ -1,30 +1,31 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
 
-// Dữ liệu cho các mục menu, dễ dàng quản lý và thêm bớt
+// ✅ SỬA LẠI: Bổ sung "roles" cho tất cả các mục menu
 const DRAWER_ITEMS = {
     main: [
-        { name: 'TongQuan', title: 'Tổng quan', icon: 'home-outline' },
-        { name: 'BanHang', title: 'Bán hàng', icon: 'cart-outline' },
+        { name: 'TongQuan', title: 'Tổng quan', icon: 'home-outline', roles: ['ROLE_ADMIN'] },
+        { name: 'BanHang', title: 'Bán hàng', icon: 'cart-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
     ],
     management: [
-        { name: 'QuanLyDonHang', title: 'Đơn hàng', icon: 'cube-outline' },
-        { name: 'QuanLyNhapHang', title: 'Nhập hàng', icon: 'arrow-down-circle-outline' },
-        { name: 'QuanLyTranh', title: 'Tranh', icon: 'palette-outline' },
-        { name: 'QuanLyHoaSi', title: 'Họa sĩ', icon: 'brush-outline' },
-        { name: 'QuanLyDanhMuc', title: 'Danh mục', icon: 'pricetags-outline' },
-        { name: 'QuanLyKhachHang', title: 'Khách hàng', icon: 'people-outline' },
+        { name: 'QuanLyDonHang', title: 'Đơn hàng', icon: 'cube-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
+        { name: 'QuanLyNhapHang', title: 'Nhập hàng', icon: 'arrow-down-circle-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
+        { name: 'QuanLyTranh', title: 'Tranh', icon: 'palette-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
+        { name: 'QuanLyHoaSi', title: 'Họa sĩ', icon: 'brush-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
+        { name: 'QuanLyDanhMuc', title: 'Danh mục', icon: 'pricetags-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
+        { name: 'QuanLyKhachHang', title: 'Khách hàng', icon: 'people-outline', roles: ['ROLE_ADMIN', 'ROLE_NHANVIEN'] },
     ],
     system: [
-        { name: 'QuanLyTaiKhoan', title: 'Tài khoản', icon: 'people-circle-outline' },
-        { name: 'QuanLyThanhToan', title: 'Thanh toán', icon: 'card-outline' },
+        { name: 'QuanLyTaiKhoan', title: 'Tài khoản', icon: 'people-circle-outline', roles: ['ROLE_ADMIN'] },
+        { name: 'QuanLyThanhToan', title: 'Thanh toán', icon: 'card-outline', roles: ['ROLE_ADMIN'] }, // Thuộc tính "roles" đã được thêm vào đây
     ]
 };
 
-// Component cho mỗi mục menu
 const DrawerItem = ({ label, icon, onPress, isActive }) => (
     <TouchableOpacity
         onPress={onPress}
@@ -37,7 +38,6 @@ const DrawerItem = ({ label, icon, onPress, isActive }) => (
     </TouchableOpacity>
 );
 
-// Component cho tiêu đề nhóm
 const DrawerHeaderGroup = ({ title }) => (
     <Text style={styles.groupTitle}>{title}</Text>
 );
@@ -46,9 +46,43 @@ const DrawerContent = ({ navigation, state }) => {
     const insets = useSafeAreaInsets();
     const activeRouteName = state.routes[state.index].name;
 
+    const [userName, setUserName] = useState('Đang tải...');
+    const [userRole, setUserRole] = useState(null);
+
+    useFocusEffect(
+        useCallback(() => {
+            const fetchUserData = async () => {
+                const name = await AsyncStorage.getItem('user_name');
+                const role = await AsyncStorage.getItem('user_role');
+                setUserName(name || 'Người dùng');
+                setUserRole(role);
+            };
+            fetchUserData();
+        }, [])
+    );
+
+    const handleLogout = async () => {
+        await AsyncStorage.clear();
+        navigation.navigate('DangNhap');
+    };
+
+    const renderItems = (items) => {
+        if (!userRole) return null; // Không render gì nếu chưa có vai trò
+        return items
+            .filter(item => item.roles && item.roles.includes(userRole))
+            .map(item => (
+                <DrawerItem
+                    key={item.name}
+                    label={item.title}
+                    icon={item.icon}
+                    isActive={activeRouteName === item.name}
+                    onPress={() => navigation.navigate(item.name)}
+                />
+            ));
+    };
+
     return (
         <View style={styles.container}>
-            {/* Header: Thông tin User */}
             <TouchableOpacity
                 style={[styles.profileContainer, { paddingTop: insets.top + SIZES.base }]}
                 onPress={() => navigation.navigate('ThongTinCaNhan')}
@@ -58,51 +92,32 @@ const DrawerContent = ({ navigation, state }) => {
                     style={styles.avatar}
                 />
                 <View>
-                    <Text style={styles.userName}>Quang Đẹp Zai</Text>
-                    <Text style={styles.userRole}>Quản trị viên</Text>
+                    <Text style={styles.userName}>{userName}</Text>
+                    <Text style={styles.userRole}>
+                        {userRole === 'ROLE_ADMIN' ? 'Quản trị viên' : 'Nhân viên'}
+                    </Text>
                 </View>
             </TouchableOpacity>
 
-            {/* Body: Danh sách menu */}
             <ScrollView style={styles.menuContainer}>
-                {DRAWER_ITEMS.main.map(item => (
-                    <DrawerItem
-                        key={item.name}
-                        label={item.title}
-                        icon={item.icon}
-                        isActive={activeRouteName === item.name}
-                        onPress={() => navigation.navigate(item.name)}
-                    />
-                ))}
+                {renderItems(DRAWER_ITEMS.main)}
                 
                 <DrawerHeaderGroup title="QUẢN LÝ" />
-                {DRAWER_ITEMS.management.map(item => (
-                    <DrawerItem
-                        key={item.name}
-                        label={item.title}
-                        icon={item.icon}
-                        isActive={activeRouteName === item.name}
-                        onPress={() => navigation.navigate(item.name)}
-                    />
-                ))}
+                {renderItems(DRAWER_ITEMS.management)}
 
-                <DrawerHeaderGroup title="HỆ THỐNG" />
-                 {DRAWER_ITEMS.system.map(item => (
-                    <DrawerItem
-                        key={item.name}
-                        label={item.title}
-                        icon={item.icon}
-                        isActive={activeRouteName === item.name}
-                        onPress={() => navigation.navigate(item.name)}
-                    />
-                ))}
+                {/* ✅ KIỂM TRA NẾU CÓ MỤC HỆ THỐNG ĐỂ HIỂN THỊ THÌ MỚI HIỆN TIÊU ĐỀ */}
+                {DRAWER_ITEMS.system.some(item => item.roles.includes(userRole)) && (
+                    <>
+                        <DrawerHeaderGroup title="HỆ THỐNG" />
+                        {renderItems(DRAWER_ITEMS.system)}
+                    </>
+                )}
             </ScrollView>
 
-            {/* Footer: Nút Đăng xuất */}
             <View style={[styles.footer, { paddingBottom: insets.bottom + SIZES.base }]}>
                 <TouchableOpacity
                     style={styles.logoutButton}
-                    onPress={() => navigation.navigate('DangNhap')}
+                    onPress={handleLogout}
                 >
                     <Ionicons name="log-out-outline" size={24} color={COLORS.danger} />
                     <Text style={styles.logoutText}>Đăng xuất</Text>
@@ -112,6 +127,7 @@ const DrawerContent = ({ navigation, state }) => {
     );
 };
 
+// ... styles không thay đổi ...
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -193,6 +209,5 @@ const styles = StyleSheet.create({
         marginLeft: SIZES.padding,
     },
 });
-
 
 export default DrawerContent;

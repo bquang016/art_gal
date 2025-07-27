@@ -23,28 +23,29 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
     const [editingPainting, setEditingPainting] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
 
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [paintingsRes, artistsRes, categoriesRes] = await Promise.all([
+                apiService.get('/paintings'),
+                apiService.get('/artists'),
+                apiService.get('/categories')
+            ]);
+            setPaintings(paintingsRes.data);
+            setArtists(artistsRes.data);
+            setCategories(categoriesRes.data);
+        } catch (error) {
+            console.error("Failed to fetch data:", error);
+            Alert.alert("Lỗi", "Không thể tải dữ liệu.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
-            const fetchData = async () => {
-                setLoading(true);
-                try {
-                    const [paintingsRes, artistsRes, categoriesRes] = await Promise.all([
-                        apiService.get('/paintings'),
-                        apiService.get('/artists'),
-                        apiService.get('/categories')
-                    ]);
-                    setPaintings(paintingsRes.data);
-                    setArtists(artistsRes.data);
-                    setCategories(categoriesRes.data);
-                } catch (error) {
-                    console.error("Failed to fetch data:", error);
-                    Alert.alert("Lỗi", "Không thể tải dữ liệu.");
-                } finally {
-                    setLoading(false);
-                }
-            };
             fetchData();
-        }, [])
+        }, [fetchData])
     );
 
     useFocusEffect(
@@ -84,7 +85,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
             return;
         }
         let pickerResult = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaType.Images,
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             quality: 0.8,
         });
@@ -99,14 +100,15 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
 
         setIsUploading(true);
         try {
-            const response = await apiService.post('/files/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                transformRequest: (data) => data,
-            });
+            // ✅ SỬA LỖI: Xóa hoàn toàn tham số thứ 3 (cấu hình headers)
+            // Axios sẽ tự động thêm header 'multipart/form-data' với boundary chính xác.
+            const response = await apiService.post('/files/upload', formData);
+            
             const uploadedFilename = response.data;
             setEditingPainting({...editingPainting, image: uploadedFilename});
             Alert.alert("Thành công", "Tải ảnh lên thành công! Nhấn 'Lưu' để xác nhận.");
         } catch (error) {
+            console.error("Upload error:", error.response?.data || error.message || error);
             Alert.alert("Lỗi", "Tải ảnh lên thất bại.");
         } finally {
             setIsUploading(false);
@@ -246,7 +248,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
         </SafeAreaView>
     );
 };
-
+// ... styles không thay đổi ...
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.white },
     header: {

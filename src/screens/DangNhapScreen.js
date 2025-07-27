@@ -26,14 +26,24 @@ const DangNhapScreen = ({ navigation }) => {
                 password: password,
             });
 
-            const { accessToken } = response.data;
-            if (accessToken) {
+            // ✅ SỬA LẠI: Đọc đúng cấu trúc response từ backend
+            const { accessToken, userDetails } = response.data;
+
+            // Kiểm tra xem accessToken và userDetails có tồn tại không
+            if (accessToken && userDetails && userDetails.roles) {
+                // Lưu tất cả thông tin cần thiết
                 await AsyncStorage.setItem('jwt_token', accessToken);
+                await AsyncStorage.setItem('user_name', userDetails.name || 'Người dùng');
+                // Backend trả về một mảng roles, ta lấy phần tử đầu tiên
+                await AsyncStorage.setItem('user_role', userDetails.roles[0]);
+                
                 navigation.replace('Main');
             } else {
-                throw new Error("Token không hợp lệ");
+                // Nếu không có, ném ra lỗi để người dùng biết
+                throw new Error("Token hoặc thông tin người dùng không hợp lệ");
             }
         } catch (error) {
+            // Hiển thị lỗi ra cho người dùng và log ra console
             console.error("Login Error:", error.response?.data || error.message);
             Alert.alert('Đăng nhập thất bại', 'Tên đăng nhập hoặc mật khẩu không chính xác.');
         }
@@ -98,7 +108,7 @@ const DangNhapScreen = ({ navigation }) => {
         </SafeAreaView>
     );
 };
-
+// ... styles không thay đổi ...
 const styles = StyleSheet.create({
     container: {
         flex: 1,

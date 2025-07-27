@@ -4,12 +4,17 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import StatusBadge from './StatusBadge';
+import { SERVER_BASE_URL } from '../api/apiService'; // ✅ THÊM DÒNG NÀY
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
 const PaintingListItem = ({ item, onEdit, onHistory }) => (
     <View style={styles.container}>
-        <Image source={{ uri: item.image }} style={styles.image} />
+        {/* ✅ SỬA LẠI ĐƯỜNG DẪN ẢNH */}
+        <Image 
+            source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
+            style={styles.image} 
+        />
         <View style={styles.infoContainer}>
             <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
             <Text style={styles.artist}>Họa sĩ: {item.artist}</Text>
@@ -29,6 +34,7 @@ const PaintingListItem = ({ item, onEdit, onHistory }) => (
     </View>
 );
 
+// ... styles không thay đổi ...
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
@@ -75,5 +81,6 @@ const styles = StyleSheet.create({
         padding: SIZES.base,
     },
 });
+
 
 export default PaintingListItem;
