@@ -85,7 +85,6 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
             setModalVisible(false);
             setEditingArtist(null);
             
-            // Tải lại danh sách sau khi lưu
             const response = await apiService.get('/artists');
             setArtists(response.data);
 

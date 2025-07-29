@@ -16,7 +16,6 @@ const QuanLyDanhMucScreen = ({ navigation }) => {
     const [modalMode, setModalMode] = useState('add');
     const [editingItem, setEditingItem] = useState(null);
 
-    // SỬA LẠI PHẦN NÀY
     useFocusEffect(
       useCallback(() => {
         const fetchCategories = async () => {

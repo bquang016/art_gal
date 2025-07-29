@@ -12,8 +12,8 @@ import apiService from '../api/apiService';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
 
 const DangNhapScreen = ({ navigation }) => {
-    const [username, setUsername] = useState('admin');
-    const [password, setPassword] = useState('admin123');
+    const [username, setUsername] = useState(NULL);
+    const [password, setPassword] = useState(NULL);
 
     const handleLogin = async () => {
         if (!username || !password) {
