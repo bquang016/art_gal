@@ -1,19 +1,37 @@
-// src/screens/DangNhapScreen.js
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     Alert, SafeAreaView, Image, KeyboardAvoidingView,
-    Platform, TouchableWithoutFeedback, Keyboard
+    Platform, TouchableWithoutFeedback, Keyboard, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../api/apiService';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
+// ✅ BỎ DÒNG IMPORT DƯỚI ĐÂY
+// import { registerForPushNotificationsAsync, sendTokenToBackend } from '../api/notificationService';
 
 const DangNhapScreen = ({ navigation }) => {
-    const [username, setUsername] = useState(NULL);
-    const [password, setPassword] = useState(NULL);
+    const [username, setUsername] = useState('admin');
+    const [password, setPassword] = useState('admin123');
+    const [isLoading, setIsLoading] = useState(true);
+
+    useFocusEffect(
+        useCallback(() => {
+            const checkToken = async () => {
+                const userToken = await AsyncStorage.getItem('jwt_token');
+                if (userToken) {
+                    navigation.replace('Main');
+                } else {
+                    setIsLoading(false);
+                }
+            };
+
+            checkToken();
+        }, [navigation])
+    );
 
     const handleLogin = async () => {
         if (!username || !password) {
@@ -26,28 +44,36 @@ const DangNhapScreen = ({ navigation }) => {
                 password: password,
             });
 
-            // ✅ SỬA LẠI: Đọc đúng cấu trúc response từ backend
             const { accessToken, userDetails } = response.data;
 
-            // Kiểm tra xem accessToken và userDetails có tồn tại không
-            if (accessToken && userDetails && userDetails.roles) {
-                // Lưu tất cả thông tin cần thiết
+            if (accessToken && userDetails) {
                 await AsyncStorage.setItem('jwt_token', accessToken);
-                await AsyncStorage.setItem('user_name', userDetails.name || 'Người dùng');
-                // Backend trả về một mảng roles, ta lấy phần tử đầu tiên
-                await AsyncStorage.setItem('user_role', userDetails.roles[0]);
+                if (userDetails.name) {
+                    await AsyncStorage.setItem('user_name', userDetails.name);
+                }
+                if (userDetails.roles && userDetails.roles.length > 0) {
+                    await AsyncStorage.setItem('user_role', userDetails.roles[0]);
+                }
+                
+                // ✅ ĐÃ XÓA PHẦN GỌI HÀM PUSH NOTIFICATION
                 
                 navigation.replace('Main');
             } else {
-                // Nếu không có, ném ra lỗi để người dùng biết
                 throw new Error("Token hoặc thông tin người dùng không hợp lệ");
             }
         } catch (error) {
-            // Hiển thị lỗi ra cho người dùng và log ra console
             console.error("Login Error:", error.response?.data || error.message);
             Alert.alert('Đăng nhập thất bại', 'Tên đăng nhập hoặc mật khẩu không chính xác.');
         }
     };
+    
+    if (isLoading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.primary }}>
+                <ActivityIndicator size="large" color={COLORS.white} />
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.primaryHover }}>
@@ -108,7 +134,7 @@ const DangNhapScreen = ({ navigation }) => {
         </SafeAreaView>
     );
 };
-// ... styles không thay đổi ...
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -124,8 +150,8 @@ const styles = StyleSheet.create({
         marginBottom: SIZES.padding * 3,
     },
     logo: {
-        width: 200, // Tăng kích thước logo
-        height: 200, // Tăng kích thước logo
+        width: 200,
+        height: 200,
         marginBottom: SIZES.padding,
     },
     formContainer: {

@@ -1,15 +1,16 @@
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, FlatList, StyleSheet,
-    TouchableOpacity, Modal, SafeAreaView, Button, TextInput, Alert, ActivityIndicator, ScrollView, Image, Switch
+    TouchableOpacity, Modal, SafeAreaView, Button, Alert, ActivityIndicator, ScrollView, Image
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
-import { SERVER_BASE_URL } from '../api/apiService'; // Import URL gốc của server
+import { SERVER_BASE_URL } from '../api/apiService';
 import apiService from '../api/apiService';
 import PaymentMethodCard from '../components/PaymentMethodCard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const QuanLyThanhToanScreen = ({ navigation }) => {
     const [paymentMethods, setPaymentMethods] = useState([]);
@@ -18,39 +19,48 @@ const QuanLyThanhToanScreen = ({ navigation }) => {
     const [selectedMethod, setSelectedMethod] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
 
-    const fetchPaymentMethods = useCallback(async () => {
-        setLoading(true);
-        try {
-            const response = await apiService.get('/payment-methods');
-            setPaymentMethods(response.data);
-        } catch (error) {
-            console.error("Failed to fetch payment methods:", error);
-            Alert.alert("Lỗi", "Không thể tải dữ liệu phương thức thanh toán.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
     useFocusEffect(
       useCallback(() => {
+        const fetchPaymentMethods = async () => {
+            setLoading(true);
+            try {
+                const response = await apiService.get('/payment-methods');
+                setPaymentMethods(response.data);
+            } catch (error) {
+                console.error("Failed to fetch payment methods:", error);
+                Alert.alert("Lỗi", "Không thể tải dữ liệu phương thức thanh toán.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchPaymentMethods();
-      }, [fetchPaymentMethods])
+      }, [])
     );
 
     const handleToggleSwitch = async (method, newValue) => {
+        if (method.methodKey === 'cash') {
+            Alert.alert("Thông báo", "Không thể thay đổi trạng thái của phương thức Tiền mặt.");
+            return;
+        }
+
         const originalMethods = [...paymentMethods];
         setPaymentMethods(prev => prev.map(m => m.id === method.id ? { ...m, enabled: newValue } : m));
         try {
             const payload = { ...method, enabled: newValue };
             await apiService.put(`/payment-methods/${method.id}`, payload);
         } catch (error) {
-            console.error("Failed to update status:", error);
-            Alert.alert("Lỗi", "Cập nhật trạng thái thất bại.");
+            console.error("Failed to update status:", error.response?.data?.message || error);
+            Alert.alert("Lỗi", error.response?.data?.message || "Cập nhật trạng thái thất bại.");
             setPaymentMethods(originalMethods);
         }
     };
 
     const handleConfigure = (method) => {
+        if (!method.configurable) {
+            Alert.alert("Thông báo", "Phương thức này không yêu cầu cấu hình.");
+            return;
+        }
         setSelectedMethod({ ...method });
         setModalVisible(true);
     };
@@ -62,6 +72,7 @@ const QuanLyThanhToanScreen = ({ navigation }) => {
             return;
         }
         let pickerResult = await ImagePicker.launchImageLibraryAsync({
+            // ✅ SỬA LỖI: Sử dụng thuộc tính đúng cho phiên bản của bạn
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             quality: 0.8,
@@ -70,16 +81,16 @@ const QuanLyThanhToanScreen = ({ navigation }) => {
         
         const uri = pickerResult.assets[0].uri;
         const filename = uri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image`;
+        const type = `image/${filename.split('.').pop()}`;
 
         const formData = new FormData();
         formData.append('file', { uri, name: filename, type });
         
         setIsUploading(true);
         try {
+            const token = await AsyncStorage.getItem('jwt_token');
             const response = await apiService.post('/files/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
+                headers: { 'Authorization': `Bearer ${token}` },
             });
             const uploadedFilename = response.data;
             setSelectedMethod({...selectedMethod, qrCodeImageUrl: uploadedFilename});
@@ -97,7 +108,8 @@ const QuanLyThanhToanScreen = ({ navigation }) => {
             await apiService.put(`/payment-methods/${selectedMethod.id}`, selectedMethod);
             Alert.alert("Thành công", "Đã lưu cấu hình.");
             setModalVisible(false);
-            fetchPaymentMethods();
+            const response = await apiService.get('/payment-methods');
+            setPaymentMethods(response.data);
         } catch (error) {
             console.error("Failed to save config:", error);
             Alert.alert("Lỗi", "Lưu cấu hình thất bại.");
@@ -192,8 +204,20 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     modalContainer: { flex: 1 },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
-    modalTitle: { ...FONTS.h2 },
+    modalHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: SIZES.padding, 
+        borderBottomWidth: 1, 
+        borderBottomColor: COLORS.lightGray 
+    },
+    // ✅ SỬA LẠI: Cho phép tiêu đề co dãn và tự xuống dòng
+    modalTitle: { 
+        ...FONTS.h2,
+        flex: 1, // Cho phép co dãn
+        marginRight: SIZES.base, // Thêm khoảng cách với nút X
+    },
     modalContent: { flex: 1, padding: SIZES.padding },
     modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray },
     hintText: { ...FONTS.body4, color: COLORS.textMuted, fontStyle: 'italic', marginTop: SIZES.base, textAlign: 'center' },

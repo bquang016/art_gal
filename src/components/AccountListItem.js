@@ -1,4 +1,3 @@
-// src/components/AccountListItem.js
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +17,7 @@ const AccountListItem = ({ item, onEdit, onResetPassword }) => (
             <Text style={styles.username}>@{item.username}</Text>
             <View style={styles.badges}>
                 <RoleBadge role={item.role} />
+                {/* ✅ HIỂN THỊ STATUS BADGE */}
                 <StatusBadge status={item.status} />
             </View>
         </View>
@@ -55,6 +55,7 @@ const styles = StyleSheet.create({
     badges: {
         flexDirection: 'row',
         marginTop: SIZES.base,
+        alignItems: 'center', // Căn chỉnh các badge cho đẹp hơn
     },
     roleBadge: {
         paddingHorizontal: SIZES.base,

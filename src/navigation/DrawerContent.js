@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
 
-// ✅ SỬA LẠI: Bổ sung "roles" cho tất cả các mục menu
 const DRAWER_ITEMS = {
     main: [
         { name: 'TongQuan', title: 'Tổng quan', icon: 'home-outline', roles: ['ROLE_ADMIN'] },
@@ -22,7 +21,7 @@ const DRAWER_ITEMS = {
     ],
     system: [
         { name: 'QuanLyTaiKhoan', title: 'Tài khoản', icon: 'people-circle-outline', roles: ['ROLE_ADMIN'] },
-        { name: 'QuanLyThanhToan', title: 'Thanh toán', icon: 'card-outline', roles: ['ROLE_ADMIN'] }, // Thuộc tính "roles" đã được thêm vào đây
+        { name: 'QuanLyThanhToan', title: 'Thanh toán', icon: 'card-outline', roles: ['ROLE_ADMIN'] },
     ]
 };
 
@@ -46,7 +45,7 @@ const DrawerContent = ({ navigation, state }) => {
     const insets = useSafeAreaInsets();
     const activeRouteName = state.routes[state.index].name;
 
-    const [userName, setUserName] = useState('Đang tải...');
+    const [userName, setUserName] = useState(null);
     const [userRole, setUserRole] = useState(null);
 
     useFocusEffect(
@@ -61,13 +60,23 @@ const DrawerContent = ({ navigation, state }) => {
         }, [])
     );
 
+    // ✅ SỬA LẠI: Hoàn thiện chức năng đăng xuất
     const handleLogout = async () => {
+        // Xóa toàn bộ dữ liệu đã lưu
         await AsyncStorage.clear();
+        
+        // Reset state để tránh hiển thị thông tin cũ
+        setUserName(null);
+        setUserRole(null);
+        
+        // Điều hướng về màn hình đăng nhập
         navigation.navigate('DangNhap');
     };
 
     const renderItems = (items) => {
-        if (!userRole) return null; // Không render gì nếu chưa có vai trò
+        if (!items) {
+            return null;
+        }
         return items
             .filter(item => item.roles && item.roles.includes(userRole))
             .map(item => (
@@ -80,6 +89,14 @@ const DrawerContent = ({ navigation, state }) => {
                 />
             ));
     };
+    
+    if (!userName || !userRole) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -105,8 +122,7 @@ const DrawerContent = ({ navigation, state }) => {
                 <DrawerHeaderGroup title="QUẢN LÝ" />
                 {renderItems(DRAWER_ITEMS.management)}
 
-                {/* ✅ KIỂM TRA NẾU CÓ MỤC HỆ THỐNG ĐỂ HIỂN THỊ THÌ MỚI HIỆN TIÊU ĐỀ */}
-                {DRAWER_ITEMS.system.some(item => item.roles.includes(userRole)) && (
+                {DRAWER_ITEMS.system.some(item => item.roles && item.roles.includes(userRole)) && (
                     <>
                         <DrawerHeaderGroup title="HỆ THỐNG" />
                         {renderItems(DRAWER_ITEMS.system)}
@@ -127,7 +143,6 @@ const DrawerContent = ({ navigation, state }) => {
     );
 };
 
-// ... styles không thay đổi ...
 const styles = StyleSheet.create({
     container: {
         flex: 1,

@@ -20,7 +20,6 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [editingAccount, setEditingAccount] = useState(null);
     const [newPassword, setNewPassword] = useState({ pass: '', confirm: '' });
 
-    // SỬA LẠI PHẦN NÀY
     useFocusEffect(
         useCallback(() => {
             const fetchAccounts = async () => {
@@ -28,12 +27,10 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                 try {
                     const response = await apiService.get('/users');
                     const formattedAccounts = response.data.map(acc => ({
+                        ...acc,
                         id: acc.id.toString(),
                         employeeName: acc.name,
-                        username: acc.username,
-                        email: acc.email,
                         role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
-                        status: 'Hoạt động' // Backend chưa có trường status, tạm mock
                     }));
                     setAccounts(formattedAccounts);
                 } catch (error) {
@@ -82,29 +79,29 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                     username: editingAccount.username,
                     email: editingAccount.email,
                     password: editingAccount.password,
-                    roles: [editingAccount.role === 'Admin' ? 'ADMIN' : 'NHANVIEN']
+                    status: editingAccount.status, // ✅ ĐẢM BẢO GỬI STATUS KHI TẠO MỚI
+                    roles: [editingAccount.role.toUpperCase()]
                 };
                 await apiService.post('/users/create', payload);
             } else {
                  const payload = {
                     name: editingAccount.employeeName,
                     email: editingAccount.email,
-                    roles: [editingAccount.role === 'Admin' ? 'ADMIN' : 'NHANVIEN']
+                    status: editingAccount.status,
+                    roles: [editingAccount.role.toUpperCase()]
                 };
                 await apiService.put(`/users/${editingAccount.id}`, payload);
             }
             Alert.alert("Thành công", `Đã ${modalMode === 'add' ? 'thêm' : 'cập nhật'} tài khoản.`);
             setFormModalVisible(false);
             
-            // Tải lại dữ liệu sau khi lưu
+            // Tải lại dữ liệu
             const response = await apiService.get('/users');
-             const formattedAccounts = response.data.map(acc => ({
+            const formattedAccounts = response.data.map(acc => ({
+                ...acc,
                 id: acc.id.toString(),
                 employeeName: acc.name,
-                username: acc.username,
-                email: acc.email,
                 role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
-                status: 'Hoạt động'
             }));
             setAccounts(formattedAccounts);
 
@@ -169,6 +166,16 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, role: 'Admin' })} style={[styles.statusSelectButton, editingAccount.role === 'Admin' && { backgroundColor: COLORS.primary }]}>
                                 <Text style={[styles.statusSelectText, editingAccount.role === 'Admin' && { color: COLORS.white }]}>Admin</Text>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <Text style={styles.inputLabel}>Trạng thái</Text>
+                        <View style={styles.statusSelectContainer}>
+                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, status: 'Hoạt động' })} style={[styles.statusSelectButton, editingAccount.status === 'Hoạt động' && { backgroundColor: COLORS.success }]}>
+                                <Text style={[styles.statusSelectText, editingAccount.status === 'Hoạt động' && { color: COLORS.white }]}>Hoạt động</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setEditingAccount({ ...editingAccount, status: 'Dừng hoạt động' })} style={[styles.statusSelectButton, editingAccount.status === 'Dừng hoạt động' && { backgroundColor: COLORS.danger }]}>
+                                <Text style={[styles.statusSelectText, editingAccount.status === 'Dừng hoạt động' && { color: COLORS.white }]}>Dừng hoạt động</Text>
                             </TouchableOpacity>
                         </View>
                     </ScrollView>

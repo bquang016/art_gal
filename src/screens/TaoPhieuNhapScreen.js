@@ -18,12 +18,10 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [selectedArtist, setSelectedArtist] = useState(null);
-    const [notes, setNotes] = useState('');
     const [slipItems, setSlipItems] = useState([]);
     const [isModalVisible, setModalVisible] = useState(false);
     const [newItem, setNewItem] = useState(null);
 
-    // SỬA LẠI PHẦN NÀY
     useFocusEffect(
         useCallback(() => {
             const fetchData = async () => {
@@ -44,7 +42,6 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                     setLoading(false);
                 }
             };
-
             fetchData();
         }, [navigation])
     );
@@ -56,23 +53,44 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
         }
         setNewItem({
             name: '',
+            size: '',
+            description: '',
             importPrice: '',
             sellingPrice: '',
-            categoryId: categories[0].id, // Mặc định chọn category đầu tiên
+            categoryId: categories[0].id,
             material: 'Sơn dầu',
         });
         setModalVisible(true);
     };
 
-    const handleAddItemToSlip = () => {
-        if (!newItem || !newItem.name || !newItem.importPrice || !newItem.sellingPrice) {
-            Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin sản phẩm.");
-            return;
-        }
+    const addItemToSlip = () => {
         const category = categories.find(c => c.id === newItem.categoryId);
         setSlipItems(prev => [...prev, { ...newItem, id: `item${Date.now()}`, category: category?.name }]);
         setModalVisible(false);
         setNewItem(null);
+    };
+
+    const handleAddItemToSlip = () => {
+        if (!newItem || !newItem.name || !newItem.importPrice || !newItem.sellingPrice) {
+            Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin sản phẩm có dấu *.");
+            return;
+        }
+
+        const importPrice = parseFloat(newItem.importPrice);
+        const sellingPrice = parseFloat(newItem.sellingPrice);
+
+        if (!isNaN(importPrice) && !isNaN(sellingPrice) && importPrice > sellingPrice) {
+            Alert.alert(
+                "Cảnh báo",
+                "Giá nhập đang cao hơn giá bán dự kiến. Bạn có chắc muốn tiếp tục?",
+                [
+                    { text: 'Hủy', style: 'cancel' },
+                    { text: 'Tiếp tục', onPress: addItemToSlip }
+                ]
+            );
+            return;
+        }
+        addItemToSlip();
     };
 
     const handleRemoveItem = (itemId) => {
@@ -87,10 +105,10 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
         
         const payload = {
             artistId: selectedArtist,
-            userId: 2, // ID của nhân viên đang đăng nhập, tạm mock là 2 (nhanvien)
-            notes: notes,
             items: slipItems.map(item => ({
                 name: item.name,
+                size: item.size,
+                description: item.description,
                 importPrice: parseFloat(item.importPrice),
                 sellingPrice: parseFloat(item.sellingPrice),
                 categoryId: item.categoryId,
@@ -105,8 +123,9 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                 { text: 'OK', onPress: () => navigation.goBack() }
             ]);
         } catch (error) {
+            const errorMessage = error.response?.data?.message || "Tạo phiếu nhập thất bại.";
             console.error("Failed to create import slip:", error.response?.data || error.message);
-            Alert.alert("Lỗi", "Tạo phiếu nhập thất bại.");
+            Alert.alert("Lỗi", errorMessage);
         } finally {
             setIsCreating(false);
         }
@@ -130,8 +149,16 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                     <ScrollView style={styles.modalContent}>
                         <Text style={styles.inputLabel}>Tên tranh *</Text>
                         <TextInput style={styles.input} value={newItem.name} onChangeText={t => setNewItem({ ...newItem, name: t })} />
+                        
+                        <Text style={styles.inputLabel}>Kích thước (VD: 80x120 cm)</Text>
+                        <TextInput style={styles.input} value={newItem.size} onChangeText={t => setNewItem({ ...newItem, size: t })} />
+                        
+                        <Text style={styles.inputLabel}>Mô tả</Text>
+                        <TextInput style={[styles.input, { height: 100, textAlignVertical: 'top' }]} value={newItem.description} onChangeText={t => setNewItem({ ...newItem, description: t })} multiline />
+
                         <Text style={styles.inputLabel}>Giá nhập (VND) *</Text>
                         <TextInput style={styles.input} value={String(newItem.importPrice)} onChangeText={t => setNewItem({ ...newItem, importPrice: t })} keyboardType="numeric" />
+                        
                         <Text style={styles.inputLabel}>Giá bán dự kiến (VND) *</Text>
                         <TextInput style={styles.input} value={String(newItem.sellingPrice)} onChangeText={t => setNewItem({ ...newItem, sellingPrice: t })} keyboardType="numeric" />
                         
@@ -189,9 +216,7 @@ const TaoPhieuNhapScreen = ({ navigation }) => {
                                 onValueChange={(itemValue) => setSelectedArtist(itemValue)}
                                 placeholder="-- Chọn họa sĩ --"
                             />
-
-                            <Text style={styles.inputLabel}>Ghi chú</Text>
-                            <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} value={notes} onChangeText={setNotes} multiline />
+                            
                             <View style={styles.listHeader}>
                                 <Text style={styles.sectionTitle}>Sản phẩm nhập ({slipItems.length})</Text>
                                 <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>

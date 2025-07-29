@@ -9,6 +9,7 @@ import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import CustomerListItem from '../components/CustomerListItem';
 import StatusBadge from '../components/StatusBadge';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
@@ -23,8 +24,8 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     const [modalMode, setModalMode] = useState('add');
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [purchaseHistory, setPurchaseHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
-    // SỬA LẠI PHẦN NÀY
     useFocusEffect(
       useCallback(() => {
         const fetchCustomers = async () => {
@@ -39,6 +40,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                 setLoading(false);
             }
         };
+
         fetchCustomers();
       }, [])
     );
@@ -64,11 +66,28 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     };
 
     const handleViewHistory = async (customer) => {
-        // TODO: API cho chức năng này chưa được xây dựng ở backend
         setEditingCustomer(customer);
-        setPurchaseHistory([]); 
         setHistoryModalVisible(true);
-        Alert.alert("Thông báo", "API cho chức năng xem lịch sử mua hàng chưa được xây dựng.");
+        setHistoryLoading(true);
+        try {
+            const token = await AsyncStorage.getItem('jwt_token');
+            if (!token) {
+                throw new Error("Không tìm thấy token xác thực.");
+            }
+
+            const response = await apiService.get(`/orders/customer/${customer.id}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            setPurchaseHistory(response.data);
+        } catch (error) {
+            console.error("Failed to fetch purchase history:", error);
+            Alert.alert("Lỗi", "Không thể tải lịch sử mua hàng. Vui lòng thử đăng nhập lại.");
+            setHistoryModalVisible(false);
+        } finally {
+            setHistoryLoading(false);
+        }
     };
 
     const handleSave = async () => {
@@ -86,9 +105,10 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                 Alert.alert("Thành công", `Đã cập nhật khách hàng: ${editingCustomer.name}`);
             }
             setFormModalVisible(false);
-            // Tải lại danh sách sau khi lưu
+            
             const response = await apiService.get('/customers');
             setCustomers(response.data);
+
         } catch(error) {
             console.error("Failed to save customer:", error.response?.data || error.message);
             Alert.alert("Lỗi", "Thao tác thất bại.");
@@ -140,7 +160,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
         </Modal>
     );
 
-     const renderHistoryModal = () => (
+    const renderHistoryModal = () => (
         <Modal visible={isHistoryModalVisible} animationType="slide">
             <SafeAreaView style={styles.modalContainer}>
                  <View style={styles.modalHeader}>
@@ -151,23 +171,38 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                 </View>
                 <View style={styles.modalContent}>
                     <Text style={styles.historyCustomerName}>{editingCustomer?.name}</Text>
-                    <FlatList
-                        data={purchaseHistory}
-                        keyExtractor={item => item.id.toString()}
-                        renderItem={({item}) => (
-                            <View style={styles.historyItem}>
-                                <View>
-                                    <Text style={styles.historyOrderId}>#{item.id}</Text>
-                                    <Text style={styles.historyDate}>{item.date}</Text>
+                    {historyLoading ? (
+                        <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+                    ) : (
+                        <FlatList
+                            data={purchaseHistory}
+                            keyExtractor={item => item.id.toString()}
+                            renderItem={({item}) => (
+                                <View style={styles.historyItem}>
+                                    <View style={styles.historyItemHeader}>
+                                        <Text style={styles.historyOrderId}>#{item.id}</Text>
+                                        <Text style={styles.historyDate}>{new Date(item.orderDate).toLocaleDateString('vi-VN')}</Text>
+                                    </View>
+
+                                    {/* ✅ HIỂN THỊ CHI TIẾT SẢN PHẨM */}
+                                    <View style={styles.productDetailsContainer}>
+                                        {item.orderDetails.map(detail => (
+                                            <View key={detail.paintingId} style={styles.productRow}>
+                                                <Text style={styles.productName} numberOfLines={1}>{detail.paintingName}</Text>
+                                                <Text style={styles.productPrice}>{formatCurrency(detail.price)}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+
+                                    <View style={styles.historyItemFooter}>
+                                        <StatusBadge status={item.status} />
+                                        <Text style={styles.historyTotal}>{formatCurrency(item.totalAmount)}</Text>
+                                    </View>
                                 </View>
-                                <View style={{alignItems: 'flex-end'}}>
-                                     <Text style={styles.historyTotal}>{formatCurrency(item.total)}</Text>
-                                     <StatusBadge status={item.status} />
-                                </View>
-                            </View>
-                        )}
-                        ListEmptyComponent={<Text style={styles.emptyText}>Chưa có lịch sử mua hàng.</Text>}
-                    />
+                            )}
+                            ListEmptyComponent={<Text style={styles.emptyText}>Chưa có lịch sử mua hàng.</Text>}
+                        />
+                    )}
                 </View>
             </SafeAreaView>
         </Modal>
@@ -207,6 +242,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     );
 };
 
+// ✅ CẬP NHẬT STYLES CHO MODAL LỊCH SỬ
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.white },
     header: { 
@@ -242,10 +278,48 @@ const styles = StyleSheet.create({
     inputLabel: { ...FONTS.h4, color: COLORS.textMuted, marginBottom: SIZES.base },
     input: { height: 50, backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.body3, marginBottom: SIZES.itemSpacing },
     historyCustomerName: { ...FONTS.h3, marginBottom: SIZES.padding },
-    historyItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SIZES.padding, borderBottomWidth: 1, borderColor: COLORS.lightGray },
+    historyItem: { 
+        backgroundColor: COLORS.white,
+        borderRadius: SIZES.radius,
+        padding: SIZES.padding,
+        marginBottom: SIZES.itemSpacing,
+    },
+    historyItemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingBottom: SIZES.base,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.lightGray
+    },
     historyOrderId: { ...FONTS.h4, color: COLORS.primary },
     historyDate: { ...FONTS.body4, color: COLORS.textMuted },
-    historyTotal: { ...FONTS.h4, marginBottom: SIZES.base },
+    productDetailsContainer: {
+        marginVertical: SIZES.padding,
+    },
+    productRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: SIZES.base / 2
+    },
+    productName: {
+        ...FONTS.body3,
+        color: COLORS.textDark,
+        flex: 1,
+        marginRight: SIZES.base
+    },
+    productPrice: {
+        ...FONTS.body3,
+        color: COLORS.textMuted
+    },
+    historyItemFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: SIZES.base,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.lightGray
+    },
+    historyTotal: { ...FONTS.h4, fontWeight: 'bold' },
     statusSelectContainer: { flexDirection: 'row', borderRadius: SIZES.radius, overflow: 'hidden' },
     statusSelectButton: { flex: 1, padding: SIZES.padding, alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
     statusButtonActiveSuccess: { backgroundColor: COLORS.success, borderColor: COLORS.success },

@@ -18,6 +18,8 @@ import QuanLyTaiKhoanScreen from '../screens/QuanLyTaiKhoanScreen';
 import QuanLyThanhToanScreen from '../screens/QuanLyThanhToanScreen';
 import ThongTinCaNhanScreen from '../screens/ThongTinCaNhanScreen';
 import PaymentScreen from '../screens/PaymentScreen'; // Import màn hình thanh toán mới
+import NotificationScreen from '../screens/NotificationScreen'; // ✅ THÊM DÒNG NÀY
+
 
 import DrawerContent from './DrawerContent';
 
@@ -61,6 +63,7 @@ const AppNavigator = () => {
             <Stack.Screen name="TaoPhieuNhap" component={TaoPhieuNhapScreen} />
             <Stack.Screen name="ThongTinCaNhan" component={ThongTinCaNhanScreen} />
             <Stack.Screen name="Payment" component={PaymentScreen} />
+            <Stack.Screen name="Notification" component={NotificationScreen} />
         </Stack.Navigator>
     );
 };

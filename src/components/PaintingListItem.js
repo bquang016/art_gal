@@ -1,40 +1,43 @@
-// src/components/PaintingListItem.js
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import StatusBadge from './StatusBadge';
-import { SERVER_BASE_URL } from '../api/apiService'; // ✅ THÊM DÒNG NÀY
+import { SERVER_BASE_URL } from '../api/apiService';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-const PaintingListItem = ({ item, onEdit, onHistory }) => (
-    <View style={styles.container}>
-        {/* ✅ SỬA LẠI ĐƯỜNG DẪN ẢNH */}
-        <Image 
-            source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
-            style={styles.image} 
-        />
-        <View style={styles.infoContainer}>
-            <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.artist}>Họa sĩ: {item.artist}</Text>
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SIZES.base}}>
-                 <StatusBadge status={item.status} />
-                 <Text style={styles.price}>{formatCurrency(item.sellingPrice)}</Text>
+const PaintingListItem = ({ item, onEdit, onHistory }) => {
+    // ✅ KIỂM TRA TRẠNG THÁI "ĐÃ BÁN"
+    const isSold = item.status === 'Đã bán';
+
+    return (
+        <View style={[styles.container, isSold && styles.soldContainer]}>
+            <Image 
+                source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
+                style={styles.image} 
+            />
+            <View style={styles.infoContainer}>
+                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                <Text style={styles.artist}>Họa sĩ: {item.artist}</Text>
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SIZES.base}}>
+                     <StatusBadge status={item.status} />
+                     <Text style={styles.price}>{formatCurrency(item.sellingPrice)}</Text>
+                </View>
+            </View>
+            <View style={styles.actions}>
+                {/* ✅ VÔ HIỆU HÓA NÚT KHI ĐÃ BÁN */}
+                <TouchableOpacity onPress={() => onHistory(item)} style={styles.button} disabled={isSold}>
+                    <Ionicons name="time-outline" size={22} color={isSold ? COLORS.lightGray : COLORS.textMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => onEdit(item)} style={styles.button} disabled={isSold}>
+                    <Ionicons name="create-outline" size={22} color={isSold ? COLORS.lightGray : COLORS.primary} />
+                </TouchableOpacity>
             </View>
         </View>
-        <View style={styles.actions}>
-            <TouchableOpacity onPress={() => onHistory(item)} style={styles.button}>
-                <Ionicons name="time-outline" size={22} color={COLORS.textMuted} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => onEdit(item)} style={styles.button}>
-                <Ionicons name="create-outline" size={22} color={COLORS.primary} />
-            </TouchableOpacity>
-        </View>
-    </View>
-);
+    );
+};
 
-// ... styles không thay đổi ...
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
@@ -48,6 +51,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 2,
         elevation: 2,
+    },
+    // ✅ THÊM STYLE CHO SẢN PHẨM ĐÃ BÁN
+    soldContainer: {
+        backgroundColor: '#f8f9fa',
+        opacity: 0.7
     },
     image: {
         width: 80,
@@ -81,6 +89,5 @@ const styles = StyleSheet.create({
         padding: SIZES.base,
     },
 });
-
 
 export default PaintingListItem;

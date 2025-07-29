@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService, { SERVER_BASE_URL } from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import PaintingListItem from '../components/PaintingListItem';
@@ -79,36 +80,41 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
     };
 
     const handleUploadImage = async () => {
-        let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-            Alert.alert("Lỗi", "Bạn cần cấp quyền truy cập thư viện ảnh.");
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Lỗi", "Quyền truy cập thư viện ảnh đã bị từ chối.");
             return;
         }
-        let pickerResult = await ImagePicker.launchImageLibraryAsync({
+
+        let result = await ImagePicker.launchImageLibraryAsync({
+            // ✅ SỬA LẠI: Trả về cú pháp đúng cho phiên bản của bạn
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
+            aspect: [4, 3],
             quality: 0.8,
         });
-        if (pickerResult.canceled) return;
+
+        if (result.canceled) {
+            return;
+        }
         
-        const uri = pickerResult.assets[0].uri;
+        const uri = result.assets[0].uri;
         const filename = uri.split('/').pop();
         const type = `image/${filename.split('.').pop()}`;
-
         const formData = new FormData();
         formData.append('file', { uri, name: filename, type });
 
         setIsUploading(true);
         try {
-            // ✅ SỬA LỖI: Xóa hoàn toàn tham số thứ 3 (cấu hình headers)
-            // Axios sẽ tự động thêm header 'multipart/form-data' với boundary chính xác.
-            const response = await apiService.post('/files/upload', formData);
-            
+            const token = await AsyncStorage.getItem('jwt_token');
+            const response = await apiService.post('/files/upload', formData, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
             const uploadedFilename = response.data;
             setEditingPainting({...editingPainting, image: uploadedFilename});
             Alert.alert("Thành công", "Tải ảnh lên thành công! Nhấn 'Lưu' để xác nhận.");
         } catch (error) {
-            console.error("Upload error:", error.response?.data || error.message || error);
+            console.error("Upload error:", error);
             Alert.alert("Lỗi", "Tải ảnh lên thất bại.");
         } finally {
             setIsUploading(false);
@@ -164,6 +170,13 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                             
                             <Text style={styles.inputLabel}>Tên tranh *</Text>
                             <TextInput style={styles.input} value={editingPainting.name} onChangeText={text => setEditingPainting({ ...editingPainting, name: text })} />
+                            
+                            <Text style={styles.inputLabel}>Kích thước</Text>
+                            <TextInput style={styles.input} value={editingPainting.size} onChangeText={text => setEditingPainting({ ...editingPainting, size: text })} />
+                            
+                            <Text style={styles.inputLabel}>Mô tả</Text>
+                            <TextInput style={[styles.input, { height: 100, textAlignVertical: 'top' }]} value={editingPainting.description} onChangeText={text => setEditingPainting({ ...editingPainting, description: text })} multiline />
+
                             <CustomPicker
                                 label="Họa sĩ *"
                                 data={artistDataForPicker}
@@ -248,7 +261,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
         </SafeAreaView>
     );
 };
-// ... styles không thay đổi ...
+
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.white },
     header: {

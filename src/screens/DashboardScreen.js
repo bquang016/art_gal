@@ -20,33 +20,13 @@ const DashboardScreen = ({ navigation }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // SỬA LẠI PHẦN NÀY
     useFocusEffect(
       useCallback(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
                 const response = await apiService.get('/dashboard');
-                const backendData = response.data;
-                
-                const safeSalesData = backendData.salesData?.data?.length > 0 ? backendData.salesData.data : [0];
-
-                const formattedData = {
-                    kpiData: backendData.kpiData,
-                    salesData: {
-                        week: {
-                            labels: backendData.salesData.labels,
-                            data: safeSalesData,
-                        }
-                    },
-                    proportionData: {
-                        category: {
-                            labels: backendData.proportionData.labels,
-                            data: backendData.proportionData.data,
-                        }
-                    }
-                };
-                setData(formattedData);
+                setData(response.data);
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error.response?.data || error.message);
                 Alert.alert("Lỗi", "Không thể tải dữ liệu tổng quan. Vui lòng kiểm tra kết nối tới server.");
@@ -78,13 +58,13 @@ const DashboardScreen = ({ navigation }) => {
 
     const { kpiData, salesData, proportionData } = data;
     
-    const pieChartData = proportionData.category.labels.map((label, index) => ({
+    const pieChartData = proportionData.labels.length > 0 ? proportionData.labels.map((label, index) => ({
         name: label,
-        population: proportionData.category.data[index],
+        population: proportionData.data[index] || 0,
         color: ['#fd7e14', '#20c997', '#0dcaf0', '#6c757d'][index % 4],
         legendFontColor: "#7F7F7F",
         legendFontSize: 14
-    }));
+    })) : [];
 
     return (
         <SafeAreaView style={styles.container}>
@@ -93,25 +73,29 @@ const DashboardScreen = ({ navigation }) => {
                     <Ionicons name="menu" size={28} color={COLORS.textDark} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Tổng quan</Text>
-                <TouchableOpacity style={styles.headerButton}>
+                {/* ✅ SỬA LẠI: Thêm onPress để điều hướng đến màn hình Notification */}
+                <TouchableOpacity 
+                    style={styles.headerButton} 
+                    onPress={() => navigation.navigate('Notification')}
+                >
                     <Ionicons name="notifications-outline" size={24} color={COLORS.textDark} />
                 </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={styles.scrollView}>
                 <View style={styles.kpiContainer}>
-                    <KpiCard icon="cube-outline" title="Tổng Đơn hàng" value={kpiData.totalOrders.toLocaleString('vi-VN')} change={0} changeText="" color={COLORS.primary} />
-                    <KpiCard icon="cash-outline" title="Tổng Doanh thu" value={kpiData.totalRevenue} change={0} changeText="" color={COLORS.success} />
-                    <KpiCard icon="archive-outline" title="Tồn kho" value={kpiData.inventory} change={0} changeText="sản phẩm" color={COLORS.textMuted}/>
-                    <KpiCard icon="trending-up-outline" title="Lợi nhuận" value={kpiData.profit} change={0} changeText="" color={COLORS.warning}/>
+                    <KpiCard icon="cube-outline" title="Tổng Đơn hàng" value={kpiData.totalOrders} isCurrency={false} color={COLORS.primary} />
+                    <KpiCard icon="cash-outline" title="Tổng Doanh thu" value={kpiData.totalRevenue} isCurrency={true} color={COLORS.success} />
+                    <KpiCard icon="archive-outline" title="Tồn kho" value={kpiData.inventory} isCurrency={false} changeText="sản phẩm" color={COLORS.textMuted}/>
+                    <KpiCard icon="trending-up-outline" title="Lợi nhuận" value={kpiData.profit} isCurrency={true} color={COLORS.warning}/>
                 </View>
 
                 {/* Biểu đồ doanh thu */}
                 <View style={styles.chartContainer}>
-                    <Text style={styles.chartTitle}>Thống kê Doanh thu (Tuần)</Text>
+                    <Text style={styles.chartTitle}>Thống kê Doanh thu (7 đơn gần nhất)</Text>
                     <LineChart
                         data={{
-                            labels: salesData.week.labels,
-                            datasets: [{ data: salesData.week.data }]
+                            labels: salesData.labels.length > 0 ? salesData.labels : ["Không có"],
+                            datasets: [{ data: salesData.data.length > 0 ? salesData.data : [0] }]
                         }}
                         width={SIZES.width - SIZES.padding * 2}
                         height={220}
@@ -131,20 +115,22 @@ const DashboardScreen = ({ navigation }) => {
                 </View>
 
                 {/* Biểu đồ tỷ lệ */}
-                <View style={styles.chartContainer}>
-                    <Text style={styles.chartTitle}>Tỷ lệ bán chạy (Thể loại)</Text>
-                    <PieChart
-                        data={pieChartData}
-                        width={SIZES.width - SIZES.padding * 2}
-                        height={220}
-                        chartConfig={{ color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})` }}
-                        accessor={"population"}
-                        backgroundColor={"transparent"}
-                        paddingLeft={"15"}
-                        center={[10, 0]}
-                        absolute
-                    />
-                </View>
+                {pieChartData.length > 0 && (
+                    <View style={styles.chartContainer}>
+                        <Text style={styles.chartTitle}>Tỷ lệ tranh (Theo thể loại)</Text>
+                        <PieChart
+                            data={pieChartData}
+                            width={SIZES.width - SIZES.padding * 2}
+                            height={220}
+                            chartConfig={{ color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})` }}
+                            accessor={"population"}
+                            backgroundColor={"transparent"}
+                            paddingLeft={"15"}
+                            center={[10, 0]}
+                            absolute
+                        />
+                    </View>
+                )}
             </ScrollView>
         </SafeAreaView>
     );

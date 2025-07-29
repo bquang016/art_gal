@@ -1,4 +1,3 @@
-// src/components/KpiCard.js
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +5,7 @@ import { COLORS, FONTS, SIZES } from '../theme/theme';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-const KpiCard = ({ icon, title, value, change, changeText, color }) => (
+const KpiCard = ({ icon, title, value, change = 0, changeText, color, isCurrency = true }) => (
     <View style={styles.kpiCard}>
         <View style={styles.kpiHeader}>
             <Text style={styles.kpiTitle}>{title}</Text>
@@ -14,19 +13,23 @@ const KpiCard = ({ icon, title, value, change, changeText, color }) => (
                 <Ionicons name={icon} size={24} color={color} />
             </View>
         </View>
-        {/* Kiểm tra nếu giá trị là số thì mới format */}
+        
         <Text style={styles.kpiValue}>
-            {typeof value === 'number' ? formatCurrency(value) : value}
+            {isCurrency ? formatCurrency(value) : (value || 0).toLocaleString('vi-VN')}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ color: change > 0 ? COLORS.success : COLORS.danger, ...FONTS.body4 }}>
-                {/* Hiển thị dấu + nếu là số dương */}
-                {change > 0 ? '+' : ''}
-                {/* Format số cho dễ đọc */}
-                {typeof change === 'number' ? change.toLocaleString('vi-VN') : change}
-            </Text>
-            <Text style={styles.kpiChangeText}> {changeText}</Text>
-        </View>
+
+        {/* ✅ SỬA LẠI: Chỉ hiển thị phần này khi change khác 0 hoặc có changeText */}
+        {(change !== 0 || changeText) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {change !== 0 && (
+                    <Text style={{ color: change > 0 ? COLORS.success : COLORS.danger, ...FONTS.body4 }}>
+                        {change > 0 ? '+' : ''}
+                        {typeof change === 'number' ? change.toLocaleString('vi-VN') : change}
+                    </Text>
+                )}
+                <Text style={styles.kpiChangeText}> {changeText}</Text>
+            </View>
+        )}
     </View>
 );
 
@@ -35,7 +38,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.white,
         borderRadius: SIZES.radius,
         padding: SIZES.base * 2,
-        width: '48%', // Chiếm gần 1 nửa chiều rộng để tạo 2 cột
+        width: '48%',
         marginBottom: SIZES.base * 2,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
@@ -58,7 +61,7 @@ const styles = StyleSheet.create({
     kpiTitle: {
         ...FONTS.body4,
         color: COLORS.textMuted,
-        flex: 1, // Để text tự xuống dòng nếu quá dài
+        flex: 1,
     },
     kpiValue: {
         ...FONTS.h3,
@@ -69,8 +72,9 @@ const styles = StyleSheet.create({
     kpiChangeText: {
         ...FONTS.body4,
         color: COLORS.textMuted,
+        // Thêm marginLeft nếu không có số thay đổi
+        marginLeft: 2,
     },
 });
 
-// Đừng quên export để các file khác có thể import
 export default KpiCard;

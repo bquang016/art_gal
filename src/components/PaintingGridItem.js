@@ -1,36 +1,48 @@
-// src/components/PaintingGridItem.js
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
-import { SERVER_BASE_URL } from '../api/apiService'; // ✅ THÊM DÒNG NÀY
+import { SERVER_BASE_URL } from '../api/apiService';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-const PaintingGridItem = ({ item, onEdit, onHistory }) => (
-    <View style={styles.container}>
-        {/* ✅ SỬA LẠI ĐƯỜNG DẪN ẢNH */}
-        <Image 
-            source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
-            style={styles.image} 
-        />
-        <View style={styles.infoContainer}>
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.price}>{formatCurrency(item.sellingPrice)}</Text>
-        </View>
-        {/* === BỔ SUNG NÚT HÀNH ĐỘNG === */}
-        <View style={styles.actionsOverlay}>
-            <TouchableOpacity onPress={() => onHistory(item)} style={styles.actionButton}>
-                <Ionicons name="time-outline" size={20} color={COLORS.white} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => onEdit(item)} style={styles.actionButton}>
-                <Ionicons name="create-outline" size={20} color={COLORS.white} />
-            </TouchableOpacity>
-        </View>
-    </View>
-);
+const PaintingGridItem = ({ item, onEdit, onHistory }) => {
+    // ✅ KIỂM TRA TRẠNG THÁI "ĐÃ BÁN"
+    const isSold = item.status === 'Đã bán';
 
-// ... styles không thay đổi ...
+    return (
+        <View style={[styles.container, isSold && styles.soldContainer]}>
+            <Image 
+                source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
+                style={styles.image} 
+            />
+            <View style={styles.infoContainer}>
+                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.price}>{formatCurrency(item.sellingPrice)}</Text>
+            </View>
+
+            {/* ✅ HIỂN THỊ LỚP PHỦ "ĐÃ BÁN" */}
+            {isSold && (
+                <View style={styles.soldOverlay}>
+                    <Text style={styles.soldText}>ĐÃ BÁN</Text>
+                </View>
+            )}
+
+            {/* ✅ VÔ HIỆU HÓA NÚT KHI ĐÃ BÁN */}
+            {!isSold && (
+                <View style={styles.actionsOverlay}>
+                    <TouchableOpacity onPress={() => onHistory(item)} style={styles.actionButton}>
+                        <Ionicons name="time-outline" size={20} color={COLORS.white} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => onEdit(item)} style={styles.actionButton}>
+                        <Ionicons name="create-outline" size={20} color={COLORS.white} />
+                    </TouchableOpacity>
+                </View>
+            )}
+        </View>
+    );
+};
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -43,9 +55,29 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 2,
     },
+    // ✅ THÊM STYLE CHO SẢN PHẨM ĐÃ BÁN
+    soldContainer: {
+        opacity: 0.6,
+    },
+    soldOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: SIZES.radius,
+    },
+    soldText: {
+        ...FONTS.h2,
+        color: COLORS.danger,
+        fontWeight: 'bold',
+        borderWidth: 2,
+        borderColor: COLORS.danger,
+        paddingHorizontal: SIZES.padding,
+        paddingVertical: SIZES.base,
+    },
     image: {
         width: '100%',
-        height: 150, // Tăng chiều cao ảnh
+        height: 150,
         borderRadius: SIZES.radius,
     },
     infoContainer: {
@@ -53,7 +85,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(0,0,0,0.4)', // Lớp nền mờ
+        backgroundColor: 'rgba(0,0,0,0.4)',
         padding: SIZES.base,
         borderBottomLeftRadius: SIZES.radius,
         borderBottomRightRadius: SIZES.radius,
@@ -67,7 +99,6 @@ const styles = StyleSheet.create({
         ...FONTS.body3,
         color: COLORS.white,
     },
-    // Styles cho nút hành động
     actionsOverlay: {
         position: 'absolute',
         top: 8,
@@ -80,6 +111,5 @@ const styles = StyleSheet.create({
         padding: SIZES.base,
     },
 });
-
 
 export default PaintingGridItem;

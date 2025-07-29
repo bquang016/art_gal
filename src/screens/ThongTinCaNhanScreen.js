@@ -12,40 +12,80 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [password, setPassword] = useState({ current: '', new: '', confirm: '' });
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
 
     useFocusEffect(
       useCallback(() => {
         const fetchCurrentUser = async () => {
             setLoading(true);
             try {
-                // Backend API này chưa tồn tại, chúng ta cần tạo nó.
-                // Tạm thời sẽ dùng dữ liệu giả lập.
-                // const response = await apiService.get('/profile/me'); 
-                const mockUser = {
-                    name: 'Quang Đẹp Trai',
-                    email: 'admin@artgallery.com',
-                    phone: '0987654321',
-                    role: 'Admin'
-                };
-                setUser(mockUser);
+                const response = await apiService.get('/profile/me'); 
+                setUser(response.data);
             } catch (error) {
                 console.error("Failed to fetch current user:", error);
-                Alert.alert("Lỗi", "Không thể tải thông tin cá nhân.");
+                Alert.alert("Lỗi", "Không thể tải thông tin cá nhân. Vui lòng đăng nhập lại.");
+                navigation.goBack();
             } finally {
                 setLoading(false);
             }
         };
 
         fetchCurrentUser();
-      }, [])
+      }, [navigation])
     );
 
-    const handleUpdateInfo = () => {
-        Alert.alert("Tính năng đang phát triển", "Chức năng cập nhật thông tin sẽ được bổ sung sau.");
+    const handleUpdateInfo = async () => {
+        if (!user || !user.name || !user.email) {
+            Alert.alert("Lỗi", "Vui lòng không để trống Tên và Email.");
+            return;
+        }
+        setIsUpdating(true);
+        try {
+            const payload = {
+                name: user.name,
+                email: user.email
+            };
+            const response = await apiService.put('/profile/me', payload);
+            setUser(response.data); // Cập nhật lại state với dữ liệu mới nhất
+            Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
+        } catch (error) {
+            console.error("Failed to update profile:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Cập nhật thông tin thất bại.");
+        } finally {
+            setIsUpdating(false);
+        }
     };
 
-    const handleChangePassword = () => {
-        Alert.alert("Tính năng đang phát triển", "Chức năng đổi mật khẩu sẽ được bổ sung sau.");
+    const handleChangePassword = async () => {
+        if (!password.current || !password.new || !password.confirm) {
+            Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường mật khẩu.");
+            return;
+        }
+        if (password.new.length < 6) {
+            Alert.alert("Lỗi", "Mật khẩu mới phải có ít nhất 6 ký tự.");
+            return;
+        }
+        if (password.new !== password.confirm) {
+            Alert.alert("Lỗi", "Mật khẩu mới và mật khẩu xác nhận không khớp.");
+            return;
+        }
+        
+        setIsChangingPassword(true);
+        try {
+            const payload = {
+                currentPassword: password.current,
+                newPassword: password.new
+            };
+            const response = await apiService.post('/profile/change-password', payload);
+            Alert.alert("Thành công", response.data);
+            setPassword({ current: '', new: '', confirm: '' }); // Xóa các trường sau khi thành công
+        } catch (error) {
+            console.error("Failed to change password:", error.response?.data || error.message);
+            Alert.alert("Lỗi", error.response?.data?.message || "Đổi mật khẩu thất bại.");
+        } finally {
+            setIsChangingPassword(false);
+        }
     };
 
     if (loading) {
@@ -78,7 +118,7 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
                 <View style={styles.profileCard}>
                     <Ionicons name="person-circle" size={100} color={COLORS.primary} />
                     <Text style={styles.profileName}>{user.name}</Text>
-                    <Text style={styles.profileRole}>{user.role}</Text>
+                    <Text style={styles.profileRole}>{user.roles.includes('ADMIN') ? 'Quản trị viên' : 'Nhân viên'}</Text>
                 </View>
 
                 <View style={styles.section}>
@@ -88,12 +128,9 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
                     
                     <Text style={styles.inputLabel}>Email</Text>
                     <TextInput style={styles.input} value={user.email} onChangeText={text => setUser({...user, email: text})}/>
-
-                    <Text style={styles.inputLabel}>Số điện thoại</Text>
-                    <TextInput style={styles.input} value={user.phone} onChangeText={text => setUser({...user, phone: text})}/>
                     
-                    <TouchableOpacity style={styles.buttonPrimary} onPress={handleUpdateInfo}>
-                        <Text style={styles.buttonTextPrimary}>Lưu thay đổi</Text>
+                    <TouchableOpacity style={[styles.buttonPrimary, isUpdating && styles.buttonDisabled]} onPress={handleUpdateInfo} disabled={isUpdating}>
+                        {isUpdating ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.buttonTextPrimary}>Lưu thay đổi</Text>}
                     </TouchableOpacity>
                 </View>
 
@@ -108,8 +145,8 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
                     <Text style={styles.inputLabel}>Xác nhận mật khẩu mới</Text>
                     <TextInput style={styles.input} secureTextEntry value={password.confirm} onChangeText={text => setPassword({...password, confirm: text})}/>
                     
-                     <TouchableOpacity style={styles.buttonPrimary} onPress={handleChangePassword}>
-                        <Text style={styles.buttonTextPrimary}>Đổi mật khẩu</Text>
+                     <TouchableOpacity style={[styles.buttonPrimary, isChangingPassword && styles.buttonDisabled]} onPress={handleChangePassword} disabled={isChangingPassword}>
+                        {isChangingPassword ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.buttonTextPrimary}>Đổi mật khẩu</Text>}
                     </TouchableOpacity>
                 </View>
             </ScrollView>
@@ -167,6 +204,11 @@ const styles = StyleSheet.create({
         borderRadius: SIZES.radius,
         alignItems: 'center',
         marginTop: SIZES.base,
+        height: 50,
+        justifyContent: 'center'
+    },
+    buttonDisabled: {
+        backgroundColor: COLORS.textMuted,
     },
     buttonTextPrimary: {
         ...FONTS.h4,
