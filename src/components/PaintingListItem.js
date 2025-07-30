@@ -7,14 +7,14 @@ import { SERVER_BASE_URL } from '../api/apiService';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-const PaintingListItem = ({ item, onEdit, onHistory }) => {
-    // ✅ KIỂM TRA TRẠNG THÁI "ĐÃ BÁN"
+// ✅ Đổi tên prop "onHistory" thành "onViewDetails"
+const PaintingListItem = ({ item, onEdit, onViewDetails }) => {
     const isSold = item.status === 'Đã bán';
 
     return (
         <View style={[styles.container, isSold && styles.soldContainer]}>
             <Image 
-                source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
+                source={item.image ? { uri: `${SERVER_BASE_URL}/api/files/${item.image}` } : require('../../assets/images/placeholder.png')} 
                 style={styles.image} 
             />
             <View style={styles.infoContainer}>
@@ -26,9 +26,9 @@ const PaintingListItem = ({ item, onEdit, onHistory }) => {
                 </View>
             </View>
             <View style={styles.actions}>
-                {/* ✅ VÔ HIỆU HÓA NÚT KHI ĐÃ BÁN */}
-                <TouchableOpacity onPress={() => onHistory(item)} style={styles.button} disabled={isSold}>
-                    <Ionicons name="time-outline" size={22} color={isSold ? COLORS.lightGray : COLORS.textMuted} />
+                {/* ✅ Cập nhật lại sự kiện onPress và icon */}
+                <TouchableOpacity onPress={() => onViewDetails(item)} style={styles.button} disabled={isSold}>
+                    <Ionicons name="eye-outline" size={22} color={isSold ? COLORS.lightGray : COLORS.textMuted} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => onEdit(item)} style={styles.button} disabled={isSold}>
                     <Ionicons name="create-outline" size={22} color={isSold ? COLORS.lightGray : COLORS.primary} />
@@ -52,7 +52,6 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 2,
     },
-    // ✅ THÊM STYLE CHO SẢN PHẨM ĐÃ BÁN
     soldContainer: {
         backgroundColor: '#f8f9fa',
         opacity: 0.7

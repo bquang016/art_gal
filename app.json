@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "art_gal",
-    "slug": "art_gal",
+    "slug": "artgal",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,14 +13,19 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,7 +36,20 @@
         {
           "photosPermission": "Ứng dụng cần quyền truy cập vào thư viện ảnh để bạn có thể chọn và tải lên hình ảnh cho các tác phẩm nghệ thuật."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff"
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d500e4d5-fd9b-44cf-92ac-83f30aae5f0e"
+      }
+    },
+    "owner": "quangtb7"
   }
 }

@@ -10,8 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../api/apiService';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
-// ✅ BỎ DÒNG IMPORT DƯỚI ĐÂY
-// import { registerForPushNotificationsAsync, sendTokenToBackend } from '../api/notificationService';
+// ✅ BƯỚC 1: IMPORT CÁC HÀM TỪ NOTIFICATION SERVICE
+import { registerForPushNotificationsAsync, sendTokenToBackend } from '../api/notificationService';
 
 const DangNhapScreen = ({ navigation }) => {
     const [username, setUsername] = useState('admin');
@@ -55,7 +55,11 @@ const DangNhapScreen = ({ navigation }) => {
                     await AsyncStorage.setItem('user_role', userDetails.roles[0]);
                 }
                 
-                // ✅ ĐÃ XÓA PHẦN GỌI HÀM PUSH NOTIFICATION
+                // ✅ BƯỚC 2: GỌI HÀM ĐĂNG KÝ VÀ GỬI TOKEN
+                const pushToken = await registerForPushNotificationsAsync();
+                if (pushToken) {
+                    await sendTokenToBackend(pushToken);
+                }
                 
                 navigation.replace('Main');
             } else {

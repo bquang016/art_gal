@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1048649036210",
+    "project_id": "art-gallery-a38e4",
+    "storage_bucket": "art-gallery-a38e4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1048649036210:android:5b844dfa99ad873e5074ab",
+        "android_client_info": {
+          "package_name": "com.bquang016.artgal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEhpxvZFFTuxi_JwjjUtqg36B4Ch0Lamo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

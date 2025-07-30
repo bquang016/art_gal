@@ -6,14 +6,14 @@ import { SERVER_BASE_URL } from '../api/apiService';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-const PaintingGridItem = ({ item, onEdit, onHistory }) => {
-    // ✅ KIỂM TRA TRẠNG THÁI "ĐÃ BÁN"
+// ✅ Đổi tên prop "onHistory" thành "onViewDetails" cho rõ nghĩa
+const PaintingGridItem = ({ item, onEdit, onViewDetails }) => {
     const isSold = item.status === 'Đã bán';
 
     return (
         <View style={[styles.container, isSold && styles.soldContainer]}>
             <Image 
-                source={{ uri: `${SERVER_BASE_URL}/api/files/${item.image}` }} 
+                source={item.image ? { uri: `${SERVER_BASE_URL}/api/files/${item.image}` } : require('../../assets/images/placeholder.png')} 
                 style={styles.image} 
             />
             <View style={styles.infoContainer}>
@@ -21,18 +21,17 @@ const PaintingGridItem = ({ item, onEdit, onHistory }) => {
                 <Text style={styles.price}>{formatCurrency(item.sellingPrice)}</Text>
             </View>
 
-            {/* ✅ HIỂN THỊ LỚP PHỦ "ĐÃ BÁN" */}
             {isSold && (
                 <View style={styles.soldOverlay}>
                     <Text style={styles.soldText}>ĐÃ BÁN</Text>
                 </View>
             )}
 
-            {/* ✅ VÔ HIỆU HÓA NÚT KHI ĐÃ BÁN */}
             {!isSold && (
                 <View style={styles.actionsOverlay}>
-                    <TouchableOpacity onPress={() => onHistory(item)} style={styles.actionButton}>
-                        <Ionicons name="time-outline" size={20} color={COLORS.white} />
+                    {/* ✅ Cập nhật lại sự kiện onPress */}
+                    <TouchableOpacity onPress={() => onViewDetails(item)} style={styles.actionButton}>
+                        <Ionicons name="eye-outline" size={20} color={COLORS.white} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => onEdit(item)} style={styles.actionButton}>
                         <Ionicons name="create-outline" size={20} color={COLORS.white} />
@@ -55,7 +54,6 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 2,
     },
-    // ✅ THÊM STYLE CHO SẢN PHẨM ĐÃ BÁN
     soldContainer: {
         opacity: 0.6,
     },

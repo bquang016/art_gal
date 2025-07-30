@@ -12,6 +12,9 @@ import { COLORS, SIZES, FONTS } from '../theme/theme';
 import PaintingListItem from '../components/PaintingListItem';
 import PaintingGridItem from '../components/PaintingGridItem';
 import CustomPicker from '../components/CustomPicker';
+import StatusBadge from '../components/StatusBadge';
+
+const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
 
 const QuanLyTranhScreen = ({ route, navigation }) => {
     const [paintings, setPaintings] = useState([]);
@@ -20,33 +23,36 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('grid');
-    const [isModalVisible, setModalVisible] = useState(false);
-    const [editingPainting, setEditingPainting] = useState(null);
+    
+    const [isEditModalVisible, setEditModalVisible] = useState(false);
+    const [isViewModalVisible, setViewModalVisible] = useState(false);
+    const [selectedPainting, setSelectedPainting] = useState(null);
+
     const [isUploading, setIsUploading] = useState(false);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [paintingsRes, artistsRes, categoriesRes] = await Promise.all([
-                apiService.get('/paintings'),
-                apiService.get('/artists'),
-                apiService.get('/categories')
-            ]);
-            setPaintings(paintingsRes.data);
-            setArtists(artistsRes.data);
-            setCategories(categoriesRes.data);
-        } catch (error) {
-            console.error("Failed to fetch data:", error);
-            Alert.alert("Lỗi", "Không thể tải dữ liệu.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
+    // ✅ SỬA LẠI CÁCH VIẾT useFocusEffect
     useFocusEffect(
         useCallback(() => {
+            const fetchData = async () => {
+                setLoading(true);
+                try {
+                    const [paintingsRes, artistsRes, categoriesRes] = await Promise.all([
+                        apiService.get('/paintings'),
+                        apiService.get('/artists'),
+                        apiService.get('/categories')
+                    ]);
+                    setPaintings(paintingsRes.data);
+                    setArtists(artistsRes.data);
+                    setCategories(categoriesRes.data);
+                } catch (error) {
+                    console.error("Failed to fetch data:", error);
+                    Alert.alert("Lỗi", "Không thể tải dữ liệu.");
+                } finally {
+                    setLoading(false);
+                }
+            };
             fetchData();
-        }, [fetchData])
+        }, [])
     );
 
     useFocusEffect(
@@ -59,24 +65,33 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
         }, [route.params?.artistFilter, navigation])
     );
 
-    const paintingsWithArtistNames = useMemo(() => {
+    const paintingsWithFullInfo = useMemo(() => {
         return paintings.map(p => {
             const artist = artists.find(a => a.id === p.artistId);
-            return { ...p, artistName: artist ? artist.name : 'Không rõ' };
+            const category = categories.find(c => c.id === p.categoryId);
+            return { 
+                ...p, 
+                artistName: artist ? artist.name : 'Không rõ',
+                categoryName: category ? category.name : 'Không rõ',
+            };
         });
-    }, [paintings, artists]);
+    }, [paintings, artists, categories]);
 
     const filteredPaintings = useMemo(() => {
-        return paintingsWithArtistNames.filter(p =>
+        return paintingsWithFullInfo.filter(p =>
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.artistName && p.artistName.toLowerCase().includes(searchQuery.toLowerCase()))
         );
-    }, [paintingsWithArtistNames, searchQuery]);
+    }, [paintingsWithFullInfo, searchQuery]);
 
     const handleOpenEditModal = (item) => {
-        const originalPainting = paintings.find(p => p.id === item.id);
-        setEditingPainting({ ...originalPainting });
-        setModalVisible(true);
+        setSelectedPainting({ ...item });
+        setEditModalVisible(true);
+    };
+
+    const handleOpenViewModal = (item) => {
+        setSelectedPainting(item);
+        setViewModalVisible(true);
     };
 
     const handleUploadImage = async () => {
@@ -85,18 +100,13 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
             Alert.alert("Lỗi", "Quyền truy cập thư viện ảnh đã bị từ chối.");
             return;
         }
-
         let result = await ImagePicker.launchImageLibraryAsync({
-            // ✅ SỬA LẠI: Trả về cú pháp đúng cho phiên bản của bạn
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,
         });
-
-        if (result.canceled) {
-            return;
-        }
+        if (result.canceled) return;
         
         const uri = result.assets[0].uri;
         const filename = uri.split('/').pop();
@@ -111,7 +121,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             const uploadedFilename = response.data;
-            setEditingPainting({...editingPainting, image: uploadedFilename});
+            setSelectedPainting({...selectedPainting, image: uploadedFilename});
             Alert.alert("Thành công", "Tải ảnh lên thành công! Nhấn 'Lưu' để xác nhận.");
         } catch (error) {
             console.error("Upload error:", error);
@@ -122,17 +132,18 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
     };
 
     const handleSavePainting = async () => {
-        if (!editingPainting || !editingPainting.name || !editingPainting.sellingPrice || !editingPainting.artistId || !editingPainting.categoryId) {
+        if (!selectedPainting || !selectedPainting.name || !selectedPainting.sellingPrice || !selectedPainting.artistId || !selectedPainting.categoryId) {
             Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường bắt buộc.");
             return;
         }
         try {
-            const payload = { ...editingPainting };
-            await apiService.put(`/paintings/${editingPainting.id}`, payload);
-            Alert.alert("Thành công", `Đã cập nhật tranh "${editingPainting.name}".`);
-            setModalVisible(false);
-            setEditingPainting(null);
-            fetchData();
+            const payload = { ...selectedPainting };
+            await apiService.put(`/paintings/${selectedPainting.id}`, payload);
+            Alert.alert("Thành công", `Đã cập nhật tranh "${selectedPainting.name}".`);
+            setEditModalVisible(false);
+            setSelectedPainting(null);
+            const response = await apiService.get('/paintings'); // Tải lại dữ liệu
+            setPaintings(response.data);
         } catch (error) {
             console.error("Failed to save painting:", error.response?.data || error.message);
             Alert.alert("Lỗi", "Cập nhật thất bại.");
@@ -142,26 +153,74 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
     const categoryDataForPicker = categories.map(c => ({ label: c.name, value: c.id }));
     const artistDataForPicker = artists.map(a => ({ label: a.name, value: a.id }));
 
-    const renderFormModal = () => (
+    const renderDetailModal = () => {
+        if (!selectedPainting) return null;
+
+        const DetailRow = ({ label, value }) => (
+            <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{label}</Text>
+                <Text style={styles.detailValue}>{value}</Text>
+            </View>
+        );
+
+        return (
+            <Modal
+                animationType="slide"
+                visible={isViewModalVisible}
+                onRequestClose={() => setViewModalVisible(false)}
+            >
+                <SafeAreaView style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle} numberOfLines={1}>{selectedPainting.name}</Text>
+                        <TouchableOpacity onPress={() => setViewModalVisible(false)}>
+                            <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.modalContent}>
+                        <Image source={{ uri: `${SERVER_BASE_URL}/api/files/${selectedPainting.image}` }} style={styles.detailImage} />
+                        <View style={styles.detailSection}>
+                           <DetailRow label="Tác giả" value={selectedPainting.artistName} />
+                           <DetailRow label="Thể loại" value={selectedPainting.categoryName} />
+                           <DetailRow label="Chất liệu" value={selectedPainting.material} />
+                           <DetailRow label="Kích thước" value={selectedPainting.size || 'Chưa cập nhật'} />
+                        </View>
+                         <View style={styles.detailSection}>
+                           <DetailRow label="Giá bán" value={formatCurrency(selectedPainting.sellingPrice)} />
+                           <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Trạng thái</Text>
+                                <StatusBadge status={selectedPainting.status} />
+                           </View>
+                        </View>
+                        <View style={styles.detailSection}>
+                            <Text style={styles.detailLabel}>Mô tả</Text>
+                            <Text style={styles.descriptionText}>{selectedPainting.description || 'Chưa có mô tả.'}</Text>
+                        </View>
+                    </ScrollView>
+                </SafeAreaView>
+            </Modal>
+        );
+    };
+
+    const renderEditModal = () => (
         <Modal
             animationType="slide"
-            visible={isModalVisible}
-            onRequestClose={() => setModalVisible(false)}
+            visible={isEditModalVisible}
+            onRequestClose={() => setEditModalVisible(false)}
         >
             <SafeAreaView style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
                     <Text style={styles.modalTitle}>Chỉnh sửa Tranh</Text>
-                    <TouchableOpacity onPress={() => setModalVisible(false)}>
+                    <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                         <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
                     </TouchableOpacity>
                 </View>
                 <ScrollView style={styles.modalContent}>
-                    {editingPainting && (
+                    {selectedPainting && (
                         <>
                             <TouchableOpacity style={styles.uploadButton} onPress={handleUploadImage} disabled={isUploading}>
                                 {isUploading ? <ActivityIndicator color={COLORS.primary}/> :
-                                    (editingPainting.image ? 
-                                        <Image source={{ uri: `${SERVER_BASE_URL}/api/files/${editingPainting.image}` }} style={styles.previewImage} />
+                                    (selectedPainting.image ? 
+                                        <Image source={{ uri: `${SERVER_BASE_URL}/api/files/${selectedPainting.image}` }} style={styles.previewImage} />
                                         : <Ionicons name="image-outline" size={48} color={COLORS.textMuted} />
                                     )
                                 }
@@ -169,41 +228,41 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                             <Text style={styles.hintText}>Nhấn vào ảnh để thay đổi</Text>
                             
                             <Text style={styles.inputLabel}>Tên tranh *</Text>
-                            <TextInput style={styles.input} value={editingPainting.name} onChangeText={text => setEditingPainting({ ...editingPainting, name: text })} />
+                            <TextInput style={styles.input} value={selectedPainting.name} onChangeText={text => setSelectedPainting({ ...selectedPainting, name: text })} />
                             
                             <Text style={styles.inputLabel}>Kích thước</Text>
-                            <TextInput style={styles.input} value={editingPainting.size} onChangeText={text => setEditingPainting({ ...editingPainting, size: text })} />
+                            <TextInput style={styles.input} value={selectedPainting.size} onChangeText={text => setSelectedPainting({ ...selectedPainting, size: text })} />
                             
                             <Text style={styles.inputLabel}>Mô tả</Text>
-                            <TextInput style={[styles.input, { height: 100, textAlignVertical: 'top' }]} value={editingPainting.description} onChangeText={text => setEditingPainting({ ...editingPainting, description: text })} multiline />
+                            <TextInput style={[styles.input, { height: 100, textAlignVertical: 'top' }]} value={selectedPainting.description} onChangeText={text => setSelectedPainting({ ...selectedPainting, description: text })} multiline />
 
                             <CustomPicker
                                 label="Họa sĩ *"
                                 data={artistDataForPicker}
-                                selectedValue={editingPainting.artistId}
-                                onValueChange={val => setEditingPainting({ ...editingPainting, artistId: val })}
+                                selectedValue={selectedPainting.artistId}
+                                onValueChange={val => setSelectedPainting({ ...selectedPainting, artistId: val })}
                                 placeholder="Chọn họa sĩ"
                             />
                              <CustomPicker
                                 label="Thể loại *"
                                 data={categoryDataForPicker}
-                                selectedValue={editingPainting.categoryId}
-                                onValueChange={val => setEditingPainting({ ...editingPainting, categoryId: val })}
+                                selectedValue={selectedPainting.categoryId}
+                                onValueChange={val => setSelectedPainting({ ...selectedPainting, categoryId: val })}
                                 placeholder="Chọn thể loại"
                             />
                             <Text style={styles.inputLabel}>Chất liệu *</Text>
-                            <TextInput style={styles.input} value={editingPainting.material} onChangeText={text => setEditingPainting({ ...editingPainting, material: text })} />
+                            <TextInput style={styles.input} value={selectedPainting.material} onChangeText={text => setSelectedPainting({ ...selectedPainting, material: text })} />
                             <Text style={styles.inputLabel}>Giá bán (VND) *</Text>
-                            <TextInput style={styles.input} value={String(editingPainting.sellingPrice)} onChangeText={text => setEditingPainting({ ...editingPainting, sellingPrice: text })} keyboardType="numeric" />
+                            <TextInput style={styles.input} value={String(selectedPainting.sellingPrice)} onChangeText={text => setSelectedPainting({ ...selectedPainting, sellingPrice: text })} keyboardType="numeric" />
                             <Text style={styles.inputLabel}>Giá nhập (VND)</Text>
-                            <TextInput style={[styles.input, styles.inputDisabled]} value={String(editingPainting.importPrice)} editable={false} />
+                            <TextInput style={[styles.input, styles.inputDisabled]} value={String(selectedPainting.importPrice)} editable={false} />
                             <Text style={styles.inputLabel}>Trạng thái</Text>
                             <View style={styles.statusSelectContainer}>
-                                <TouchableOpacity onPress={() => setEditingPainting({ ...editingPainting, status: 'Đang bán' })} style={[styles.statusSelectButton, editingPainting.status === 'Đang bán' && styles.statusSelectButtonActive]}>
-                                    <Text style={[styles.statusSelectText, editingPainting.status === 'Đang bán' && styles.statusSelectTextActive]}>Đang bán</Text>
+                                <TouchableOpacity onPress={() => setSelectedPainting({ ...selectedPainting, status: 'Đang bán' })} style={[styles.statusSelectButton, selectedPainting.status === 'Đang bán' && styles.statusSelectButtonActive]}>
+                                    <Text style={[styles.statusSelectText, selectedPainting.status === 'Đang bán' && styles.statusSelectTextActive]}>Đang bán</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setEditingPainting({ ...editingPainting, status: 'Dừng bán' })} style={[styles.statusSelectButton, editingPainting.status === 'Dừng bán' && styles.statusSelectButtonActive]}>
-                                    <Text style={[styles.statusSelectText, editingPainting.status === 'Dừng bán' && styles.statusSelectTextActive]}>Dừng bán</Text>
+                                <TouchableOpacity onPress={() => setSelectedPainting({ ...selectedPainting, status: 'Dừng bán' })} style={[styles.statusSelectButton, selectedPainting.status === 'Dừng bán' && styles.statusSelectButtonActive]}>
+                                    <Text style={[styles.statusSelectText, selectedPainting.status === 'Dừng bán' && styles.statusSelectTextActive]}>Dừng bán</Text>
                                 </TouchableOpacity>
                             </View>
                         </>
@@ -248,8 +307,8 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                     data={filteredPaintings}
                     renderItem={({ item }) =>
                         viewMode === 'grid'
-                            ? <PaintingGridItem item={{...item, artist: item.artistName}} onEdit={handleOpenEditModal} onHistory={() => alert('Xem lịch sử')} />
-                            : <PaintingListItem item={{...item, artist: item.artistName}} onEdit={handleOpenEditModal} onHistory={() => alert('Xem lịch sử')} />
+                            ? <PaintingGridItem item={item} onEdit={handleOpenEditModal} onViewDetails={handleOpenViewModal} />
+                            : <PaintingListItem item={item} onEdit={handleOpenEditModal} onViewDetails={handleOpenViewModal} />
                     }
                     keyExtractor={item => item.id.toString()}
                     numColumns={viewMode === 'grid' ? 2 : 1}
@@ -257,7 +316,8 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
                     ListEmptyComponent={<Text style={styles.emptyText}>Không tìm thấy tranh nào.</Text>}
                 />
             )}
-            {renderFormModal()}
+            {renderEditModal()}
+            {renderDetailModal()}
         </SafeAreaView>
     );
 };
@@ -286,7 +346,7 @@ const styles = StyleSheet.create({
     emptyText: { textAlign: 'center', marginTop: SIZES.padding * 2, ...FONTS.body3, color: COLORS.textMuted },
     modalContainer: { flex: 1, backgroundColor: COLORS.white },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SIZES.padding, borderBottomWidth: 1, borderBottomColor: COLORS.lightGray },
-    modalTitle: { ...FONTS.h2 },
+    modalTitle: { ...FONTS.h2, flex: 1, marginRight: SIZES.base },
     modalContent: { flex: 1, padding: SIZES.padding },
     modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray, justifyContent: 'flex-end' },
     inputLabel: { ...FONTS.body3, color: COLORS.textMuted, marginBottom: SIZES.base, fontWeight: '600' },
@@ -297,28 +357,15 @@ const styles = StyleSheet.create({
     statusSelectButtonActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
     statusSelectText: { ...FONTS.body3, fontWeight: '600', color: COLORS.textDark },
     statusSelectTextActive: { color: COLORS.white },
-    uploadButton: {
-        height: 200,
-        backgroundColor: COLORS.background,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: SIZES.radius,
-        marginBottom: SIZES.base,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    previewImage: {
-        width: '100%',
-        height: '100%',
-        borderRadius: SIZES.radius,
-        resizeMode: 'contain',
-    },
-    hintText: {
-        ...FONTS.body4,
-        color: COLORS.textMuted,
-        textAlign: 'center',
-        marginBottom: SIZES.padding,
-    },
+    uploadButton: { height: 200, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', borderRadius: SIZES.radius, marginBottom: SIZES.base, borderWidth: 1, borderColor: COLORS.border },
+    previewImage: { width: '100%', height: '100%', borderRadius: SIZES.radius, resizeMode: 'contain' },
+    hintText: { ...FONTS.body4, color: COLORS.textMuted, textAlign: 'center', marginBottom: SIZES.padding },
+    detailImage: { width: '100%', height: 250, borderRadius: SIZES.radius, resizeMode: 'contain', backgroundColor: COLORS.background, marginBottom: SIZES.padding },
+    detailSection: { backgroundColor: COLORS.white, borderRadius: SIZES.radius, padding: SIZES.padding, marginBottom: SIZES.itemSpacing, borderWidth: 1, borderColor: COLORS.lightGray },
+    detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SIZES.base },
+    detailLabel: { ...FONTS.body3, color: COLORS.textMuted },
+    detailValue: { ...FONTS.h4, color: COLORS.textDark, flex: 1, textAlign: 'right' },
+    descriptionText: { ...FONTS.body3, color: COLORS.textDark, lineHeight: 22, marginTop: SIZES.base },
 });
 
 export default QuanLyTranhScreen;
