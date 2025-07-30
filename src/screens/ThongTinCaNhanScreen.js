@@ -8,12 +8,19 @@ import { Ionicons } from '@expo/vector-icons';
 import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 
+// HÀM KIỂM TRA EMAIL
+const validateEmail = (email) => {
+    const re = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    return re.test(String(email).toLowerCase());
+};
+
 const ThongTinCaNhanScreen = ({ navigation }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [password, setPassword] = useState({ current: '', new: '', confirm: '' });
     const [isUpdating, setIsUpdating] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [emailError, setEmailError] = useState(''); // State cho lỗi email
 
     useFocusEffect(
       useCallback(() => {
@@ -40,6 +47,12 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
             Alert.alert("Lỗi", "Vui lòng không để trống Tên và Email.");
             return;
         }
+        // THÊM LOGIC VALIDATE EMAIL
+        if (user.email && !validateEmail(user.email)) {
+            setEmailError('Định dạng email không hợp lệ.');
+            return;
+        }
+
         setIsUpdating(true);
         try {
             const payload = {
@@ -47,7 +60,7 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
                 email: user.email
             };
             const response = await apiService.put('/profile/me', payload);
-            setUser(response.data); // Cập nhật lại state với dữ liệu mới nhất
+            setUser(response.data);
             Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
         } catch (error) {
             console.error("Failed to update profile:", error.response?.data || error.message);
@@ -79,12 +92,21 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
             };
             const response = await apiService.post('/profile/change-password', payload);
             Alert.alert("Thành công", response.data);
-            setPassword({ current: '', new: '', confirm: '' }); // Xóa các trường sau khi thành công
+            setPassword({ current: '', new: '', confirm: '' });
         } catch (error) {
             console.error("Failed to change password:", error.response?.data || error.message);
             Alert.alert("Lỗi", error.response?.data?.message || "Đổi mật khẩu thất bại.");
         } finally {
             setIsChangingPassword(false);
+        }
+    };
+
+    const handleEmailChange = (text) => {
+        setUser({...user, email: text});
+        if (text && !validateEmail(text)) {
+            setEmailError('Định dạng email không hợp lệ.');
+        } else {
+            setEmailError('');
         }
     };
 
@@ -127,7 +149,14 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
                     <TextInput style={styles.input} value={user.name} onChangeText={text => setUser({...user, name: text})}/>
                     
                     <Text style={styles.inputLabel}>Email</Text>
-                    <TextInput style={styles.input} value={user.email} onChangeText={text => setUser({...user, email: text})}/>
+                    <TextInput 
+                        style={[styles.input, emailError ? styles.inputError : null]} 
+                        value={user.email} 
+                        onChangeText={handleEmailChange}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                    />
+                    {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
                     
                     <TouchableOpacity style={[styles.buttonPrimary, isUpdating && styles.buttonDisabled]} onPress={handleUpdateInfo} disabled={isUpdating}>
                         {isUpdating ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.buttonTextPrimary}>Lưu thay đổi</Text>}
@@ -197,6 +226,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: SIZES.padding,
         ...FONTS.body3,
         marginBottom: SIZES.itemSpacing,
+    },
+    inputError: {
+        borderColor: COLORS.danger,
+        borderWidth: 1,
+    },
+    errorText: {
+        ...FONTS.body4,
+        color: COLORS.danger,
+        marginTop: -SIZES.itemSpacing + 4,
+        marginBottom: SIZES.itemSpacing,
+        marginLeft: SIZES.base,
     },
     buttonPrimary: {
         backgroundColor: COLORS.primary,

@@ -13,6 +13,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
+// HÀM KIỂM TRA EMAIL
+const validateEmail = (email) => {
+    const re = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    return re.test(String(email).toLowerCase());
+};
+
 const QuanLyKhachHangScreen = ({ navigation }) => {
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,6 +31,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [purchaseHistory, setPurchaseHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [emailError, setEmailError] = useState('');
 
     useFocusEffect(
       useCallback(() => {
@@ -40,7 +47,6 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                 setLoading(false);
             }
         };
-
         fetchCustomers();
       }, [])
     );
@@ -56,12 +62,14 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     const handleOpenAddModal = () => {
         setModalMode('add');
         setEditingCustomer({ name: '', phone: '', email: '', address: '', status: 'Hoạt động' });
+        setEmailError('');
         setFormModalVisible(true);
     };
 
     const handleOpenEditModal = (customer) => {
         setModalMode('edit');
         setEditingCustomer({ ...customer });
+        setEmailError('');
         setFormModalVisible(true);
     };
 
@@ -74,11 +82,8 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
             if (!token) {
                 throw new Error("Không tìm thấy token xác thực.");
             }
-
             const response = await apiService.get(`/orders/customer/${customer.id}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             setPurchaseHistory(response.data);
         } catch (error) {
@@ -95,6 +100,10 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
             Alert.alert("Lỗi", "Vui lòng điền Tên và Số điện thoại.");
             return;
         }
+        if (editingCustomer.email && !validateEmail(editingCustomer.email)) {
+            setEmailError('Định dạng email không hợp lệ.');
+            return;
+        }
 
         try {
             if (modalMode === 'add') {
@@ -105,13 +114,20 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                 Alert.alert("Thành công", `Đã cập nhật khách hàng: ${editingCustomer.name}`);
             }
             setFormModalVisible(false);
-            
             const response = await apiService.get('/customers');
             setCustomers(response.data);
-
         } catch(error) {
             console.error("Failed to save customer:", error.response?.data || error.message);
             Alert.alert("Lỗi", "Thao tác thất bại.");
+        }
+    };
+
+    const handleEmailChange = (text) => {
+        setEditingCustomer({...editingCustomer, email: text});
+        if (text && !validateEmail(text)) {
+            setEmailError('Định dạng email không hợp lệ.');
+        } else {
+            setEmailError('');
         }
     };
 
@@ -133,7 +149,14 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                         <TextInput style={styles.input} value={editingCustomer.phone} onChangeText={text => setEditingCustomer({...editingCustomer, phone: text})} keyboardType="phone-pad" />
                         
                         <Text style={styles.inputLabel}>Email</Text>
-                        <TextInput style={styles.input} value={editingCustomer.email} onChangeText={text => setEditingCustomer({...editingCustomer, email: text})} keyboardType="email-address" />
+                        <TextInput 
+                            style={[styles.input, emailError ? styles.inputError : null]} 
+                            value={editingCustomer.email} 
+                            onChangeText={handleEmailChange} 
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+                        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
                         
                         <Text style={styles.inputLabel}>Địa chỉ</Text>
                         <TextInput style={[styles.input, {height: 80, textAlignVertical: 'top'}]} value={editingCustomer.address} onChangeText={text => setEditingCustomer({...editingCustomer, address: text})} multiline />
@@ -160,7 +183,7 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
         </Modal>
     );
 
-    const renderHistoryModal = () => (
+     const renderHistoryModal = () => (
         <Modal visible={isHistoryModalVisible} animationType="slide">
             <SafeAreaView style={styles.modalContainer}>
                  <View style={styles.modalHeader}>
@@ -183,8 +206,6 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                                         <Text style={styles.historyOrderId}>#{item.id}</Text>
                                         <Text style={styles.historyDate}>{new Date(item.orderDate).toLocaleDateString('vi-VN')}</Text>
                                     </View>
-
-                                    {/* ✅ HIỂN THỊ CHI TIẾT SẢN PHẨM */}
                                     <View style={styles.productDetailsContainer}>
                                         {item.orderDetails.map(detail => (
                                             <View key={detail.paintingId} style={styles.productRow}>
@@ -193,7 +214,6 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
                                             </View>
                                         ))}
                                     </View>
-
                                     <View style={styles.historyItemFooter}>
                                         <StatusBadge status={item.status} />
                                         <Text style={styles.historyTotal}>{formatCurrency(item.totalAmount)}</Text>
@@ -242,7 +262,6 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
     );
 };
 
-// ✅ CẬP NHẬT STYLES CHO MODAL LỊCH SỬ
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.white },
     header: { 
@@ -277,6 +296,17 @@ const styles = StyleSheet.create({
     modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray },
     inputLabel: { ...FONTS.h4, color: COLORS.textMuted, marginBottom: SIZES.base },
     input: { height: 50, backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.body3, marginBottom: SIZES.itemSpacing },
+    inputError: {
+        borderColor: COLORS.danger,
+        borderWidth: 1,
+    },
+    errorText: {
+        ...FONTS.body4,
+        color: COLORS.danger,
+        marginTop: -SIZES.itemSpacing + 4,
+        marginBottom: SIZES.itemSpacing,
+        marginLeft: SIZES.base,
+    },
     historyCustomerName: { ...FONTS.h3, marginBottom: SIZES.padding },
     historyItem: { 
         backgroundColor: COLORS.white,

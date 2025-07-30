@@ -7,7 +7,6 @@ import { SERVER_BASE_URL } from '../api/apiService';
 
 const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-// ✅ Đổi tên prop "onHistory" thành "onViewDetails"
 const PaintingListItem = ({ item, onEdit, onViewDetails }) => {
     const isSold = item.status === 'Đã bán';
 
@@ -18,15 +17,15 @@ const PaintingListItem = ({ item, onEdit, onViewDetails }) => {
                 style={styles.image} 
             />
             <View style={styles.infoContainer}>
-                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-                <Text style={styles.artist}>Họa sĩ: {item.artist}</Text>
-                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SIZES.base}}>
+                <View>
+                    <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                </View>
+                <View style={styles.footer}>
                      <StatusBadge status={item.status} />
                      <Text style={styles.price}>{formatCurrency(item.sellingPrice)}</Text>
                 </View>
             </View>
             <View style={styles.actions}>
-                {/* ✅ Cập nhật lại sự kiện onPress và icon */}
                 <TouchableOpacity onPress={() => onViewDetails(item)} style={styles.button} disabled={isSold}>
                     <Ionicons name="eye-outline" size={22} color={isSold ? COLORS.lightGray : COLORS.textMuted} />
                 </TouchableOpacity>
@@ -64,16 +63,24 @@ const styles = StyleSheet.create({
     infoContainer: {
         flex: 1,
         marginLeft: SIZES.base * 1.5,
-        height: '100%',
-        justifyContent: 'space-between',
+        // ✅ SỬA LẠI: Bỏ height: '100%' và để flexbox tự căn chỉnh
+        justifyContent: 'space-between', 
+        alignSelf: 'stretch', // Đảm bảo container co dãn theo chiều cao của item
     },
     name: {
         ...FONTS.h4,
         color: COLORS.textDark,
+        marginBottom: SIZES.base / 2,
     },
     artist: {
         ...FONTS.body3,
         color: COLORS.textMuted,
+    },
+    footer: {
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginTop: SIZES.base
     },
     price: {
         ...FONTS.h4,
@@ -82,7 +89,6 @@ const styles = StyleSheet.create({
     actions: {
         marginLeft: SIZES.base,
         justifyContent: 'space-around',
-        height: '100%',
     },
     button: {
         padding: SIZES.base,

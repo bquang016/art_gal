@@ -9,6 +9,12 @@ import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import AccountListItem from '../components/AccountListItem';
 
+// HÀM KIỂM TRA EMAIL
+const validateEmail = (email) => {
+    const re = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    return re.test(String(email).toLowerCase());
+};
+
 const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [accounts, setAccounts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -19,40 +25,45 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [modalMode, setModalMode] = useState('add');
     const [editingAccount, setEditingAccount] = useState(null);
     const [newPassword, setNewPassword] = useState({ pass: '', confirm: '' });
+    const [emailError, setEmailError] = useState(''); // State cho lỗi email
 
+    const fetchAccounts = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await apiService.get('/users');
+            const formattedAccounts = response.data.map(acc => ({
+                ...acc,
+                id: acc.id.toString(),
+                employeeName: acc.name,
+                role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
+            }));
+            setAccounts(formattedAccounts);
+        } catch (error) {
+            console.error("Failed to fetch accounts:", error.response?.data || error.message);
+            Alert.alert("Lỗi", "Không thể tải danh sách tài khoản. Bạn có phải là Admin không?");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // SỬA LẠI CÁCH VIẾT useFocusEffect
     useFocusEffect(
         useCallback(() => {
-            const fetchAccounts = async () => {
-                setLoading(true);
-                try {
-                    const response = await apiService.get('/users');
-                    const formattedAccounts = response.data.map(acc => ({
-                        ...acc,
-                        id: acc.id.toString(),
-                        employeeName: acc.name,
-                        role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
-                    }));
-                    setAccounts(formattedAccounts);
-                } catch (error) {
-                    console.error("Failed to fetch accounts:", error.response?.data || error.message);
-                    Alert.alert("Lỗi", "Không thể tải danh sách tài khoản. Bạn có phải là Admin không?");
-                } finally {
-                    setLoading(false);
-                }
-            };
             fetchAccounts();
-        }, [])
+        }, [fetchAccounts])
     );
 
     const handleOpenAddModal = () => {
         setModalMode('add');
         setEditingAccount({ employeeName: '', username: '', email: '', password: '', role: 'Nhân viên', status: 'Hoạt động' });
+        setEmailError('');
         setFormModalVisible(true);
     };
 
     const handleOpenEditModal = (account) => {
         setModalMode('edit');
         setEditingAccount({ ...account });
+        setEmailError('');
         setFormModalVisible(true);
     };
 
@@ -71,6 +82,10 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
             Alert.alert("Lỗi", "Vui lòng nhập mật khẩu cho tài khoản mới.");
             return;
         }
+        if (editingAccount.email && !validateEmail(editingAccount.email)) {
+            setEmailError('Định dạng email không hợp lệ.');
+            return;
+        }
 
         try {
             if (modalMode === 'add') {
@@ -79,7 +94,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                     username: editingAccount.username,
                     email: editingAccount.email,
                     password: editingAccount.password,
-                    status: editingAccount.status, // ✅ ĐẢM BẢO GỬI STATUS KHI TẠO MỚI
+                    status: editingAccount.status,
                     roles: [editingAccount.role.toUpperCase()]
                 };
                 await apiService.post('/users/create', payload);
@@ -94,16 +109,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
             }
             Alert.alert("Thành công", `Đã ${modalMode === 'add' ? 'thêm' : 'cập nhật'} tài khoản.`);
             setFormModalVisible(false);
-            
-            // Tải lại dữ liệu
-            const response = await apiService.get('/users');
-            const formattedAccounts = response.data.map(acc => ({
-                ...acc,
-                id: acc.id.toString(),
-                employeeName: acc.name,
-                role: acc.roles.includes("ADMIN") ? "Admin" : "Nhân viên",
-            }));
-            setAccounts(formattedAccounts);
+            fetchAccounts();
 
         } catch (error) {
             const errorMessage = error.response?.data?.message || "Thao tác thất bại.";
@@ -129,6 +135,15 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         } catch(error) {
             console.error("Reset password error:", error.response?.data || error.message);
             Alert.alert("Lỗi", "Đặt lại mật khẩu thất bại.");
+        }
+    };
+    
+    const handleEmailChange = (text) => {
+        setEditingAccount({...editingAccount, email: text});
+        if (text && !validateEmail(text)) {
+            setEmailError('Định dạng email không hợp lệ.');
+        } else {
+            setEmailError('');
         }
     };
 
@@ -157,7 +172,14 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                         )}
 
                         <Text style={styles.inputLabel}>Email *</Text>
-                        <TextInput style={styles.input} value={editingAccount.email} onChangeText={text => setEditingAccount({ ...editingAccount, email: text })} keyboardType="email-address" />
+                        <TextInput 
+                            style={[styles.input, emailError ? styles.inputError : null]} 
+                            value={editingAccount.email} 
+                            onChangeText={handleEmailChange} 
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+                        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
                         <Text style={styles.inputLabel}>Vai trò</Text>
                         <View style={styles.statusSelectContainer}>
@@ -290,6 +312,17 @@ const styles = StyleSheet.create({
     inputLabel: { ...FONTS.h4, color: COLORS.textMuted, marginBottom: SIZES.base },
     input: { height: 50, backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.body3, marginBottom: SIZES.itemSpacing },
     inputDisabled: { backgroundColor: COLORS.lightGray },
+    inputError: {
+        borderColor: COLORS.danger,
+        borderWidth: 1,
+    },
+    errorText: {
+        ...FONTS.body4,
+        color: COLORS.danger,
+        marginTop: -SIZES.itemSpacing + 4,
+        marginBottom: SIZES.itemSpacing,
+        marginLeft: SIZES.base,
+    },
     statusSelectContainer: { flexDirection: 'row', borderRadius: SIZES.radius, overflow: 'hidden', marginBottom: SIZES.itemSpacing },
     statusSelectButton: { flex: 1, padding: SIZES.padding, alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
     statusSelectText: { ...FONTS.body3, fontWeight: '600', color: COLORS.textDark },
