@@ -30,7 +30,7 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
 
     const [isUploading, setIsUploading] = useState(false);
 
-    // ✅ SỬA LẠI CÁCH VIẾT useFocusEffect
+   
     useFocusEffect(
         useCallback(() => {
             const fetchData = async () => {

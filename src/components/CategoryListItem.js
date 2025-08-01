@@ -1,12 +1,15 @@
-// src/components/CategoryListItem.js
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import StatusBadge from './StatusBadge';
 
-const CategoryListItem = ({ item, onEdit }) => (
-    <View style={styles.container}>
+const CategoryListItem = ({ item, onEdit, onViewDetails }) => (
+    <TouchableOpacity 
+        style={styles.container} 
+        onPress={() => onViewDetails(item)} // Nhấn vào để xem chi tiết
+        onLongPress={() => onEdit(item)} // Giữ lâu để sửa
+    >
         <View style={styles.infoContainer}>
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
@@ -15,16 +18,17 @@ const CategoryListItem = ({ item, onEdit }) => (
                 <StatusBadge status={item.status} />
             </View>
         </View>
-        <TouchableOpacity onPress={() => onEdit(item)} style={styles.editButton}>
-            <Ionicons name="create-outline" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
-    </View>
+        <View style={styles.actions}>
+            <TouchableOpacity onPress={() => onEdit(item)} style={styles.actionButton}>
+                <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
+        </View>
+    </TouchableOpacity>
 );
 
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
-        alignItems: 'center',
         backgroundColor: COLORS.white,
         borderRadius: SIZES.radius,
         padding: SIZES.padding,
@@ -50,13 +54,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        marginTop: SIZES.base,
     },
     countText: {
         ...FONTS.body4,
         color: COLORS.textMuted,
     },
-    editButton: {
+    actions: {
+        justifyContent: 'center',
         marginLeft: SIZES.padding,
+    },
+    actionButton: {
         padding: SIZES.base,
     },
 });

@@ -9,6 +9,11 @@ import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import ArtistListItem from '../components/ArtistListItem';
 
+const validateEmail = (email) => {
+    const re = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    return re.test(String(email).toLowerCase());
+};
+
 const QuanLyHoaSiScreen = ({ navigation }) => {
     const [artists, setArtists] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -17,24 +22,26 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
     const [isModalVisible, setModalVisible] = useState(false);
     const [modalMode, setModalMode] = useState('add');
     const [editingArtist, setEditingArtist] = useState(null);
+    const [emailError, setEmailError] = useState('');
 
-    // SỬA LẠI PHẦN NÀY
+    const fetchArtists = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await apiService.get('/artists');
+            setArtists(response.data);
+        } catch (error) {
+            console.error("Failed to fetch artists:", error);
+            Alert.alert("Lỗi", "Không thể tải danh sách họa sĩ.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // ✅ SỬA LẠI CÁCH VIẾT useFocusEffect
     useFocusEffect(
       useCallback(() => {
-        const fetchArtists = async () => {
-            setLoading(true);
-            try {
-                const response = await apiService.get('/artists');
-                setArtists(response.data);
-            } catch (error) {
-                console.error("Failed to fetch artists:", error);
-                Alert.alert("Lỗi", "Không thể tải danh sách họa sĩ.");
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchArtists();
-      }, [])
+      }, [fetchArtists])
     );
 
     const filteredArtists = useMemo(() => {
@@ -59,18 +66,24 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
             address: '',
             status: 'Đang hợp tác'
         });
+        setEmailError('');
         setModalVisible(true);
     };
 
     const handleOpenEditModal = (artist) => {
         setModalMode('edit');
         setEditingArtist({ ...artist });
+        setEmailError('');
         setModalVisible(true);
     };
 
     const handleSaveArtist = async () => {
         if (!editingArtist || !editingArtist.name || !editingArtist.email) {
             Alert.alert("Lỗi", "Vui lòng điền đầy đủ Tên và Email của họa sĩ.");
+            return;
+        }
+        if (editingArtist.email && !validateEmail(editingArtist.email)) {
+            setEmailError('Định dạng email không hợp lệ.');
             return;
         }
 
@@ -84,13 +97,19 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
             }
             setModalVisible(false);
             setEditingArtist(null);
-            
-            const response = await apiService.get('/artists');
-            setArtists(response.data);
-
+            fetchArtists();
         } catch (error) {
             console.error("Failed to save artist:", error.response?.data || error.message);
             Alert.alert("Lỗi", "Thao tác thất bại.");
+        }
+    };
+    
+    const handleEmailChange = (text) => {
+        setEditingArtist({...editingArtist, email: text});
+        if (text && !validateEmail(text)) {
+            setEmailError('Định dạng email không hợp lệ.');
+        } else {
+            setEmailError('');
         }
     };
 
@@ -112,12 +131,23 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
                         <>
                             <Text style={styles.inputLabel}>Họ và Tên *</Text>
                             <TextInput style={styles.input} value={editingArtist.name} onChangeText={text => setEditingArtist({ ...editingArtist, name: text })} />
+                            
                             <Text style={styles.inputLabel}>Email *</Text>
-                            <TextInput style={styles.input} value={editingArtist.email} onChangeText={text => setEditingArtist({ ...editingArtist, email: text })} keyboardType="email-address" />
+                            <TextInput 
+                                style={[styles.input, emailError ? styles.inputError : null]} 
+                                value={editingArtist.email} 
+                                onChangeText={handleEmailChange} 
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
+                            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+                            
                             <Text style={styles.inputLabel}>Số điện thoại</Text>
                             <TextInput style={styles.input} value={editingArtist.phone} onChangeText={text => setEditingArtist({ ...editingArtist, phone: text })} keyboardType="phone-pad" />
+                            
                             <Text style={styles.inputLabel}>Địa chỉ</Text>
                             <TextInput style={styles.input} value={editingArtist.address} onChangeText={text => setEditingArtist({ ...editingArtist, address: text })} />
+                            
                             <Text style={styles.inputLabel}>Trạng thái</Text>
                             <View style={styles.statusSelectContainer}>
                                 <TouchableOpacity
@@ -241,6 +271,17 @@ const styles = StyleSheet.create({
     modalFooter: { flexDirection: 'row', padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray, justifyContent: 'flex-end'},
     inputLabel: { ...FONTS.body3, color: COLORS.textMuted, marginBottom: SIZES.base, fontWeight: '600' },
     input: { height: 50, backgroundColor: COLORS.background, borderRadius: SIZES.radius, paddingHorizontal: SIZES.padding, ...FONTS.body3, marginBottom: SIZES.itemSpacing },
+    inputError: {
+        borderColor: COLORS.danger,
+        borderWidth: 1,
+    },
+    errorText: {
+        ...FONTS.body4,
+        color: COLORS.danger,
+        marginTop: -SIZES.itemSpacing + 4,
+        marginBottom: SIZES.itemSpacing,
+        marginLeft: SIZES.base,
+    },
     statusSelectContainer: { flexDirection: 'row', borderWidth: 1, borderColor: COLORS.border, borderRadius: SIZES.radius, overflow: 'hidden' },
     statusSelectButton: { flex: 1, padding: SIZES.padding, alignItems: 'center' },
     statusSelectButtonActive: { backgroundColor: COLORS.primary },
