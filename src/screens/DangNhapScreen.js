@@ -10,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../api/apiService';
 import { COLORS, FONTS, SIZES } from '../theme/theme';
-// ✅ BƯỚC 1: IMPORT CÁC HÀM TỪ NOTIFICATION SERVICE
 import { registerForPushNotificationsAsync, sendTokenToBackend } from '../api/notificationService';
 
 const DangNhapScreen = ({ navigation }) => {
@@ -48,6 +47,11 @@ const DangNhapScreen = ({ navigation }) => {
 
             if (accessToken && userDetails) {
                 await AsyncStorage.setItem('jwt_token', accessToken);
+                
+                // ✅ THÊM DÒNG NÀY ĐỂ LƯU USER ID
+                if (userDetails.id) {
+                    await AsyncStorage.setItem('user_id', userDetails.id.toString());
+                }
                 if (userDetails.name) {
                     await AsyncStorage.setItem('user_name', userDetails.name);
                 }
@@ -55,7 +59,6 @@ const DangNhapScreen = ({ navigation }) => {
                     await AsyncStorage.setItem('user_role', userDetails.roles[0]);
                 }
                 
-                // ✅ BƯỚC 2: GỌI HÀM ĐĂNG KÝ VÀ GỬI TOKEN
                 const pushToken = await registerForPushNotificationsAsync();
                 if (pushToken) {
                     await sendTokenToBackend(pushToken);

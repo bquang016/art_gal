@@ -165,22 +165,31 @@ const QuanLyThanhToanScreen = ({ navigation }) => {
                 <View style={{ width: 44 }} />
             </View>
             
-            {loading ? (
-                <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
-            ) : (
-                <FlatList
-                    data={paymentMethods}
-                    renderItem={({ item }) => (
-                        <PaymentMethodCard 
-                            method={item} 
-                            onConfigure={handleConfigure} 
-                            onToggleSwitch={handleToggleSwitch} 
-                        />
-                    )}
-                    keyExtractor={item => item.id.toString()}
-                    contentContainerStyle={styles.listContainer}
-                />
-            )}
+            <View style={styles.content}>
+                {/* DÒNG THÔNG BÁO ĐƯỢC THÊM VÀO ĐÂY */}
+                <View style={styles.warningBox}>
+                    <Ionicons name="shield-checkmark-outline" size={24} color={COLORS.warning} />
+                    <Text style={styles.warningText}>Chức năng này chỉ dành cho Quản trị viên.</Text>
+                </View>
+                
+                {loading ? (
+                    <ActivityIndicator style={{ flex: 1 }} size="large" color={COLORS.primary} />
+                ) : (
+                    <FlatList
+                        data={paymentMethods}
+                        renderItem={({ item }) => (
+                            <PaymentMethodCard 
+                                method={item} 
+                                onConfigure={handleConfigure} 
+                                onToggleSwitch={handleToggleSwitch} 
+                            />
+                        )}
+                        keyExtractor={item => item.id.toString()}
+                        contentContainerStyle={styles.listContainer}
+                    />
+                )}
+            </View>
+
             {renderConfigModal()}
         </SafeAreaView>
     );
@@ -199,9 +208,29 @@ const styles = StyleSheet.create({
     },
     headerButton: { padding: SIZES.base },
     headerTitle: { ...FONTS.h2 },
+    // STYLE MỚI CHO VIEW CHA
+    content: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+    },
+    // STYLE MỚI CHO THÔNG BÁO
+    warningBox: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: `${COLORS.warning}20`, 
+        padding: SIZES.padding, 
+        margin: SIZES.padding,
+        marginBottom: 0,
+        borderRadius: SIZES.radius 
+    },
+    warningText: { 
+        ...FONTS.body3, 
+        color: '#856404', 
+        marginLeft: SIZES.base, 
+        flex: 1 
+    },
     listContainer: { 
         padding: SIZES.padding,
-        backgroundColor: COLORS.background,
     },
     modalContainer: { flex: 1 },
     modalHeader: { 
@@ -212,11 +241,10 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1, 
         borderBottomColor: COLORS.lightGray 
     },
-    // ✅ SỬA LẠI: Cho phép tiêu đề co dãn và tự xuống dòng
     modalTitle: { 
         ...FONTS.h2,
-        flex: 1, // Cho phép co dãn
-        marginRight: SIZES.base, // Thêm khoảng cách với nút X
+        flex: 1, 
+        marginRight: SIZES.base,
     },
     modalContent: { flex: 1, padding: SIZES.padding },
     modalFooter: { padding: SIZES.padding, borderTopWidth: 1, borderTopColor: COLORS.lightGray },

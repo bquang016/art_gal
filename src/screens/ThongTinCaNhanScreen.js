@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Import AsyncStorage
 import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 
@@ -61,6 +62,10 @@ const ThongTinCaNhanScreen = ({ navigation }) => {
             };
             const response = await apiService.put('/profile/me', payload);
             setUser(response.data);
+
+            // ✅ SỬA LỖI: Cập nhật lại tên trong AsyncStorage
+            await AsyncStorage.setItem('user_name', response.data.name);
+
             Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
         } catch (error) {
             console.error("Failed to update profile:", error.response?.data || error.message);

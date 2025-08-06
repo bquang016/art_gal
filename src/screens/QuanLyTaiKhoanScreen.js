@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // ✅ Import AsyncStorage
 import apiService from '../api/apiService';
 import { COLORS, SIZES, FONTS } from '../theme/theme';
 import AccountListItem from '../components/AccountListItem';
@@ -25,7 +26,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
     const [modalMode, setModalMode] = useState('add');
     const [editingAccount, setEditingAccount] = useState(null);
     const [newPassword, setNewPassword] = useState({ pass: '', confirm: '' });
-    const [emailError, setEmailError] = useState(''); // State cho lỗi email
+    const [emailError, setEmailError] = useState('');
 
     const fetchAccounts = useCallback(async () => {
         setLoading(true);
@@ -46,7 +47,6 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         }
     }, []);
 
-    // SỬA LẠI CÁCH VIẾT useFocusEffect
     useFocusEffect(
         useCallback(() => {
             fetchAccounts();
@@ -87,6 +87,8 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
             return;
         }
 
+        const roleToSend = editingAccount.role === 'Admin' ? 'ADMIN' : 'NHANVIEN';
+
         try {
             if (modalMode === 'add') {
                 const payload = {
@@ -95,7 +97,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                     email: editingAccount.email,
                     password: editingAccount.password,
                     status: editingAccount.status,
-                    roles: [editingAccount.role.toUpperCase()]
+                    roles: [roleToSend]
                 };
                 await apiService.post('/users/create', payload);
             } else {
@@ -103,9 +105,15 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
                     name: editingAccount.employeeName,
                     email: editingAccount.email,
                     status: editingAccount.status,
-                    roles: [editingAccount.role.toUpperCase()]
+                    roles: [roleToSend]
                 };
                 await apiService.put(`/users/${editingAccount.id}`, payload);
+                
+                // ✅ SỬA LỖI: KIỂM TRA VÀ CẬP NHẬT ASYNCSTORAGE
+                const currentUserId = await AsyncStorage.getItem('user_id');
+                if (currentUserId === editingAccount.id) {
+                    await AsyncStorage.setItem('user_name', editingAccount.employeeName);
+                }
             }
             Alert.alert("Thành công", `Đã ${modalMode === 'add' ? 'thêm' : 'cập nhật'} tài khoản.`);
             setFormModalVisible(false);
@@ -147,6 +155,7 @@ const QuanLyTaiKhoanScreen = ({ navigation }) => {
         }
     };
 
+    // ... (phần render và styles giữ nguyên không đổi)
     const renderFormModal = () => (
         <Modal visible={isFormModalVisible} animationType="slide">
             <SafeAreaView style={styles.modalContainer}>
