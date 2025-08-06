@@ -24,8 +24,8 @@ const QuanLyDonHangScreen = ({ navigation }) => {
 
     const [isModalVisible, setModalVisible] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [originalOrderStatus, setOriginalOrderStatus] = useState(null);
 
-    // SỬA LẠI PHẦN NÀY
     useFocusEffect(
       useCallback(() => {
         const fetchOrders = async () => {
@@ -34,7 +34,6 @@ const QuanLyDonHangScreen = ({ navigation }) => {
                 const response = await apiService.get('/orders');
                 const formattedOrders = response.data.map(order => ({
                     ...order,
-                    // Ánh xạ lại các trường cho khớp với component OrderItem
                     id: order.id.toString(),
                     date: new Date(order.orderDate).toLocaleDateString('vi-VN'),
                     customer: order.customerName,
@@ -62,6 +61,7 @@ const QuanLyDonHangScreen = ({ navigation }) => {
     
     const handleSelectOrder = (order) => {
         setSelectedOrder({ ...order });
+        setOriginalOrderStatus(order.status);
         setModalVisible(true);
     };
 
@@ -73,7 +73,6 @@ const QuanLyDonHangScreen = ({ navigation }) => {
             Alert.alert("Thành công", `Đã cập nhật trạng thái đơn hàng #${selectedOrder.id}`);
             setModalVisible(false);
             
-            // Tải lại danh sách sau khi cập nhật
             const response = await apiService.get('/orders');
             const formattedOrders = response.data.map(order => ({
                 ...order,
@@ -92,64 +91,87 @@ const QuanLyDonHangScreen = ({ navigation }) => {
     
     const availableStatuses = ['Chờ xác nhận', 'Đang xử lý', 'Hoàn thành', 'Đã hủy'];
 
-    const renderDetailModal = () => (
-        <Modal
-            animationType="slide"
-            visible={isModalVisible}
-            onRequestClose={() => setModalVisible(false)}
-        >
-            <SafeAreaView style={styles.modalContainer}>
-                <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Chi tiết #{selectedOrder?.id}</Text>
-                    <TouchableOpacity onPress={() => setModalVisible(false)}>
-                        <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
-                    </TouchableOpacity>
-                </View>
-                {selectedOrder && (
-                    <ScrollView style={styles.modalContent}>
-                        <View style={styles.detailSection}>
-                            <Text style={styles.detailRow}>Khách hàng: {selectedOrder.customer}</Text>
-                            <Text style={styles.detailRow}>Người tạo: {selectedOrder.userName}</Text>
-                            <Text style={styles.detailRow}>Ngày tạo: {selectedOrder.date}</Text>
-                        </View>
+    const renderDetailModal = () => {
+        const isAlreadyCancelled = originalOrderStatus === 'Đã hủy';
 
-                        <View style={styles.detailSection}>
-                            <Text style={styles.sectionTitle}>Sản phẩm</Text>
-                            {/* Chi tiết sản phẩm có thể được tải từ một API khác nếu cần */}
-                            <View style={styles.totalRow}>
-                                <Text style={styles.totalText}>Tổng cộng</Text>
-                                <Text style={styles.totalAmount}>{formatCurrency(selectedOrder.total)}</Text>
+        return (
+            <Modal
+                animationType="slide"
+                visible={isModalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <SafeAreaView style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Chi tiết #{selectedOrder?.id}</Text>
+                        <TouchableOpacity onPress={() => setModalVisible(false)}>
+                            <Ionicons name="close-circle" size={30} color={COLORS.textMuted} />
+                        </TouchableOpacity>
+                    </View>
+                    {selectedOrder && (
+                        <ScrollView style={styles.modalContent}>
+                            <View style={styles.detailSection}>
+                                <Text style={styles.detailRow}>Khách hàng: {selectedOrder.customer}</Text>
+                                <Text style={styles.detailRow}>Người tạo: {selectedOrder.userName}</Text>
+                                <Text style={styles.detailRow}>Ngày tạo: {selectedOrder.date}</Text>
                             </View>
-                        </View>
-                        
-                        <View style={styles.detailSection}>
-                            <Text style={styles.sectionTitle}>Cập nhật trạng thái</Text>
-                            <View style={styles.statusSelectContainer}>
-                                {availableStatuses.map(status => (
-                                     <TouchableOpacity 
-                                        key={status}
-                                        style={[
-                                            styles.statusSelectButton_Modal, 
-                                            selectedOrder.status === status && styles.statusSelectButtonActive_Modal
-                                        ]}
-                                        onPress={() => setSelectedOrder({...selectedOrder, status: status})}
-                                    >
-                                        <Text style={[
-                                            styles.statusSelectText_Modal,
-                                            selectedOrder.status === status && styles.statusSelectTextActive_Modal
-                                        ]}>{status}</Text>
-                                    </TouchableOpacity>
+
+                            <View style={styles.detailSection}>
+                                <Text style={styles.sectionTitle}>Sản phẩm</Text>
+                                {selectedOrder.orderDetails && selectedOrder.orderDetails.map((detail, index) => (
+                                    <View key={detail.paintingId || index} style={styles.productRow}>
+                                        <Text style={styles.productName} numberOfLines={1}>
+                                            {detail.paintingName}
+                                        </Text>
+                                        <Text style={styles.productPrice}>
+                                            {formatCurrency(detail.price)}
+                                        </Text>
+                                    </View>
                                 ))}
+                                <View style={styles.totalRow}>
+                                    <Text style={styles.totalText}>Tổng cộng</Text>
+                                    <Text style={styles.totalAmount}>{formatCurrency(selectedOrder.total)}</Text>
+                                </View>
                             </View>
-                        </View>
-                    </ScrollView>
-                )}
-                <View style={styles.modalFooter}>
-                    <Button title="Lưu thay đổi" onPress={handleUpdateStatus} color={COLORS.primary} />
-                </View>
-            </SafeAreaView>
-        </Modal>
-    );
+                            
+                            <View style={styles.detailSection}>
+                                <Text style={styles.sectionTitle}>Cập nhật trạng thái</Text>
+                                {isAlreadyCancelled && (
+                                    <Text style={styles.warningText}>Đơn hàng đã hủy không thể thay đổi trạng thái.</Text>
+                                )}
+                                <View style={styles.statusSelectContainer}>
+                                    {availableStatuses.map(status => (
+                                        <TouchableOpacity 
+                                            key={status}
+                                            style={[
+                                                styles.statusSelectButton_Modal,
+                                                // Áp dụng style active nếu trạng thái được chọn
+                                                selectedOrder.status === status && styles.statusSelectButtonActive_Modal,
+                                                // ✅ ÁP DỤNG STYLE DISABLED CHỈ CHO CÁC NÚT KHÔNG ĐƯỢC CHỌN KHI ĐƠN ĐÃ HỦY
+                                                isAlreadyCancelled && selectedOrder.status !== status && styles.disabledButton_Modal
+                                            ]}
+                                            onPress={() => setSelectedOrder({...selectedOrder, status: status})}
+                                            disabled={isAlreadyCancelled}
+                                        >
+                                            <Text style={[
+                                                styles.statusSelectText_Modal,
+                                                selectedOrder.status === status && styles.statusSelectTextActive_Modal,
+                                                isAlreadyCancelled && selectedOrder.status !== status && styles.disabledText_Modal
+                                            ]}>{status}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        </ScrollView>
+                    )}
+                    <View style={styles.modalFooter}>
+                        {!isAlreadyCancelled && (
+                             <Button title="Lưu thay đổi" onPress={handleUpdateStatus} color={COLORS.primary} />
+                        )}
+                    </View>
+                </SafeAreaView>
+            </Modal>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -274,8 +296,22 @@ const styles = StyleSheet.create({
     statusSelectContainer: { flexWrap: 'wrap', flexDirection: 'row' },
     statusSelectButton_Modal: { padding: SIZES.base, paddingHorizontal: SIZES.padding, borderRadius: SIZES.radius, borderWidth: 1, borderColor: COLORS.border, marginRight: SIZES.base, marginBottom: SIZES.base },
     statusSelectButtonActive_Modal: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-    statusSelectText_Modal: { ...FONTS.body3, fontWeight: '600' },
+    statusSelectText_Modal: { ...FONTS.body3, fontWeight: '600', color: COLORS.textDark },
     statusSelectTextActive_Modal: { color: COLORS.white },
+    // ✅ THAY ĐỔI/THÊM STYLE MỚI
+    disabledButton_Modal: {
+        backgroundColor: COLORS.lightGray,
+        borderColor: COLORS.border,
+    },
+    disabledText_Modal: {
+        color: COLORS.textMuted
+    },
+    warningText: {
+        ...FONTS.body3,
+        color: COLORS.danger,
+        fontStyle: 'italic',
+        marginBottom: SIZES.padding
+    }
 });
 
 export default QuanLyDonHangScreen;

@@ -99,8 +99,10 @@ const QuanLyHoaSiScreen = ({ navigation }) => {
             setEditingArtist(null);
             fetchArtists();
         } catch (error) {
+            // ✅ SỬA LẠI PHẦN NÀY ĐỂ HIỂN THỊ LỖI CỤ THỂ TỪ SERVER
+            const errorMessage = error.response?.data?.message || "Thao tác thất bại.";
             console.error("Failed to save artist:", error.response?.data || error.message);
-            Alert.alert("Lỗi", "Thao tác thất bại.");
+            Alert.alert("Lỗi", errorMessage);
         }
     };
     

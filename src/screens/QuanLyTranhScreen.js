@@ -130,12 +130,9 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
             setIsUploading(false);
         }
     };
-
-    const handleSavePainting = async () => {
-        if (!selectedPainting || !selectedPainting.name || !selectedPainting.sellingPrice || !selectedPainting.artistId || !selectedPainting.categoryId) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường bắt buộc.");
-            return;
-        }
+    
+    // Tách logic lưu ra một hàm riêng để tái sử dụng
+    const proceedWithSave = async () => {
         try {
             const payload = { ...selectedPainting };
             await apiService.put(`/paintings/${selectedPainting.id}`, payload);
@@ -148,6 +145,30 @@ const QuanLyTranhScreen = ({ route, navigation }) => {
             console.error("Failed to save painting:", error.response?.data || error.message);
             Alert.alert("Lỗi", "Cập nhật thất bại.");
         }
+    };
+
+    const handleSavePainting = async () => {
+        if (!selectedPainting || !selectedPainting.name || !selectedPainting.sellingPrice || !selectedPainting.artistId || !selectedPainting.categoryId) {
+            Alert.alert("Lỗi", "Vui lòng điền đầy đủ các trường bắt buộc.");
+            return;
+        }
+        
+        const importPrice = parseFloat(selectedPainting.importPrice);
+        const sellingPrice = parseFloat(selectedPainting.sellingPrice);
+
+        if (!isNaN(importPrice) && !isNaN(sellingPrice) && importPrice > sellingPrice) {
+            Alert.alert(
+                "Cảnh báo",
+                "Giá nhập đang cao hơn giá bán. Bạn có chắc muốn tiếp tục?",
+                [
+                    { text: 'Hủy', style: 'cancel' },
+                    { text: 'Vẫn lưu', onPress: proceedWithSave }
+                ]
+            );
+            return;
+        }
+        
+        proceedWithSave();
     };
     
     const categoryDataForPicker = categories.map(c => ({ label: c.name, value: c.id }));

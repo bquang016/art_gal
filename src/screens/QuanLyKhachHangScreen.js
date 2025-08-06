@@ -117,8 +117,9 @@ const QuanLyKhachHangScreen = ({ navigation }) => {
             const response = await apiService.get('/customers');
             setCustomers(response.data);
         } catch(error) {
+            const errorMessage = error.response?.data?.message || "Thao tác thất bại.";
             console.error("Failed to save customer:", error.response?.data || error.message);
-            Alert.alert("Lỗi", "Thao tác thất bại.");
+            Alert.alert("Lỗi", errorMessage);
         }
     };
 
